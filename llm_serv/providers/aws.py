@@ -44,9 +44,12 @@ class AWSLLMService(LLMService):
         self._client = boto3.session.Session(
             profile_name=os.getenv("AWS_PROFILE"),
             region_name=os.getenv("AWS_DEFAULT_REGION")
-        ).client(service_name="bedrock-runtime", config=config)
-    
-       
+        ).client(
+            service_name="bedrock-runtime", 
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            config=config
+        )       
 
     def _convert(self, request:LLMRequest) -> tuple[list, dict, dict]:
         """
