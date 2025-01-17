@@ -9,7 +9,12 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 
 from llm_serv.api import get_llm_service
-from llm_serv.exceptions import InternalConversionException, ServiceCallException, ServiceCallThrottlingException, StructuredResponseException
+from llm_serv.exceptions import (
+    InternalConversionException,
+    ServiceCallException,
+    ServiceCallThrottlingException,
+    StructuredResponseException,
+)
 from llm_serv.providers.base import LLMRequest, LLMResponse
 from llm_serv.registry import REGISTRY, Model
 
@@ -47,10 +52,7 @@ def create_app() -> FastAPI:
     )
 
     # Add compression middleware - compress responses > 1KB
-    app.add_middleware(
-        GZipMiddleware,
-        minimum_size=1000  # 1KB
-    )
+    app.add_middleware(GZipMiddleware, minimum_size=1000)  # 1KB
 
     # Add error handlers
     @app.exception_handler(Exception)
@@ -74,11 +76,7 @@ async def list_models() -> list[Model]:
     except Exception as e:
         logger.error(f"Failed to list models: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=500,
-            detail={
-                "error": "registry_error",
-                "message": f"Failed to retrieve model list: {str(e)}"
-            }
+            status_code=500, detail={"error": "registry_error", "message": f"Failed to retrieve model list: {str(e)}"}
         ) from e
 
 
@@ -93,10 +91,7 @@ async def list_providers() -> list[str]:
         logger.error(f"Failed to list providers: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail={
-                "error": "registry_error",
-                "message": f"Failed to retrieve provider list: {str(e)}"
-            }
+            detail={"error": "registry_error", "message": f"Failed to retrieve provider list: {str(e)}"},
         ) from e
 
 
@@ -105,18 +100,15 @@ async def chat(model_provider: str, model_name: str, request: LLMRequest) -> LLM
     try:
         logger.info(f"Chatting with model {model_provider}/{model_name}")
         logger.info(f"Request: {request}")
-        
+
         # First of all, check if the model is available
         try:
             model = REGISTRY.get_model(provider=model_provider, name=model_name)
         except ValueError as e:
             logger.error(f"Model not found: {model_provider}/{model_name}")
             raise HTTPException(
-                status_code=404, 
-                detail={
-                    "error": "model_not_found",
-                    "message": f"Model {model_provider}/{model_name} not found"
-                }
+                status_code=404,
+                detail={"error": "model_not_found", "message": f"Model {model_provider}/{model_name} not found"},
             ) from e
 
         # Increment chat request counters
@@ -136,20 +128,10 @@ async def chat(model_provider: str, model_name: str, request: LLMRequest) -> LLM
             response = llm_service(request)
         except InternalConversionException as e:
             raise HTTPException(
-                status_code=400,
-                detail={
-                    "error": "internal_conversion_error",
-                    "message": str(e)
-                }
+                status_code=400, detail={"error": "internal_conversion_error", "message": str(e)}
             ) from e
         except ServiceCallThrottlingException as e:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "error": "service_throttling",
-                    "message": str(e)
-                }
-            ) from e
+            raise HTTPException(status_code=429, detail={"error": "service_throttling", "message": str(e)}) from e
         except StructuredResponseException as e:
             raise HTTPException(
                 status_code=422,
@@ -157,25 +139,16 @@ async def chat(model_provider: str, model_name: str, request: LLMRequest) -> LLM
                     "error": "structured_response_error",
                     "message": str(e),
                     "xml": e.xml,
-                    "return_class": str(e.return_class) if e.return_class else None
-                }
+                    "return_class": str(e.return_class) if e.return_class else None,
+                },
             ) from e
         except ServiceCallException as e:
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "error": "service_call_error",
-                    "message": str(e)
-                }
-            ) from e
+            raise HTTPException(status_code=502, detail={"error": "service_call_error", "message": str(e)}) from e
         except Exception as e:
             logger.error(f"LLM service error: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=500,
-                detail={
-                    "error": "internal_server_error",
-                    "message": f"Error processing chat request: {str(e)}"
-                }
+                detail={"error": "internal_server_error", "message": f"Error processing chat request: {str(e)}"},
             ) from e
 
         logger.info(f"Response: {response}")
@@ -205,8 +178,8 @@ async def chat(model_provider: str, model_name: str, request: LLMRequest) -> LLM
             status_code=500,
             detail={
                 "error": "internal_server_error",
-                "message": "An unexpected error occurred processing your request"
-            }
+                "message": "An unexpected error occurred processing your request",
+            },
         ) from e
 
 

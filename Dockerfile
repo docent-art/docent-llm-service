@@ -1,4 +1,4 @@
-# Use Python 3.12 slim base image for smaller size
+# Use Python 3.12 slim base image
 FROM python:3.12-slim
 
 # Set working directory
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install poetry
 RUN pip install --no-cache-dir poetry==1.8.4
 
-# Copy only requirements first for better caching
+# Copy only requirements
 COPY pyproject.toml poetry.lock ./
 
 # Install dependencies
@@ -38,7 +38,7 @@ ENV PYTHONPATH="/app" \
 EXPOSE ${API_PORT}
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=1 \
     CMD curl -f http://localhost:${API_PORT}/health || exit 1
 
 # Launch the FastAPI server
