@@ -1,11 +1,6 @@
-"""
-Run with response = asyncio.run(await internal_client(request, route))
-
-route = "http://localhost:20004/retrieve"
-"""
-
 import httpx
 
+from llm_serv.exceptions import InternalConversionException, ModelNotFoundException, ServiceCallException, ServiceCallThrottlingException, StructuredResponseException
 from llm_serv.providers.base import LLMRequest, LLMResponse, LLMResponseFormat
 
 
@@ -30,35 +25,58 @@ class LLMServiceClient:
         It returns a list of models as provider/name pairs available in the server.
         Example:
         [
-            {"provider": "AZURE_OPENAI", "name": "gpt-4o"},
-            {"provider": "OPENAI", "name": "gpt-4o-mini"},
+            {"provider": "AZURE_OPENAI", "name": "gpt-4"},
+            {"provider": "OPENAI", "name": "gpt-4-mini"},
             {"provider": "AWS", "name": "claude-3-haiku"},
         ]
+
+        It raises:
+            ServiceCallException - when there is an error retrieving the model list
         """
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.base_url}/list_models",
-                headers=self._default_headers
-            )
-            response.raise_for_status()
-            return response.json()
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.base_url}/list_models",
+                    headers=self._default_headers
+                )
+                
+                if response.status_code != 200:
+                    error_data = response.json()
+                    error_msg = error_data.get("detail", {}).get("message", str(error_data))
+                    raise ServiceCallException(f"Failed to list models: {error_msg}")
+                    
+                return response.json()
+        except httpx.RequestError as e:
+            raise ServiceCallException(f"Failed to connect to server: {str(e)}")
 
     async def list_providers(self) -> list[str]:
         """
         This method calls the /list_providers endpoint of the server.
         It returns a list of providers available in the server.
+
+        It raises:
+            ServiceCallException - when there is an error retrieving the provider list
         """
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{self.base_url}/list_providers",
-                headers=self._default_headers
-            )
-            response.raise_for_status()
-            return response.json()
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.base_url}/list_providers",
+                    headers=self._default_headers
+                )
+                
+                if response.status_code != 200:
+                    error_data = response.json()
+                    error_msg = error_data.get("detail", {}).get("message", str(error_data))
+                    raise ServiceCallException(f"Failed to list providers: {error_msg}")
+                    
+                return response.json()
+        except httpx.RequestError as e:
+            raise ServiceCallException(f"Failed to connect to server: {str(e)}")
 
     def set_model(self, provider: str, name: str):
         """
         This method sets the model to be used in the chat method.
+        Warning, it does not raise any error!
         """
         self.provider = provider
         self.name = name
@@ -67,6 +85,13 @@ class LLMServiceClient:
         """
         This method calls the /chat endpoint of the server.
         It returns a LLMResponse object.
+
+        It raises:            
+            ModelNotFoundException - when the model is not found on the backend
+            InternalConversionException - when the internal conversion to the particular provider fails
+            ServiceCallException - when the service call fails for any reason
+            ServiceCallThrottlingException - when the service call is throttled but the number retries is exhausted
+            StructuredResponseException - when the structured response parsing fails
         """
         if not self.provider or not self.name:
             raise ValueError("Model is not set, please set it with client.set_model(provider, name) first!")
@@ -77,18 +102,44 @@ class LLMServiceClient:
         async with httpx.AsyncClient() as client:
             request_data = request.model_dump(mode="json")
 
-            response = await client.post(
-                f"{self.base_url}/chat/{self.provider}/{self.name}",
-                json=request_data,
-                headers=self._default_headers
-            )
-            response.raise_for_status()
+            try:
+                response = await client.post(
+                    f"{self.base_url}/chat/{self.provider}/{self.name}",
+                    json=request_data,
+                    headers=self._default_headers
+                )
+                
+                # Handle non-200 responses
+                if response.status_code != 200:
+                    error_data = response.json()
+                    error_type = error_data.get("detail", {}).get("error", "unknown_error")
+                    error_msg = error_data.get("detail", {}).get("message", str(error_data))
 
-            llm_response_as_json = response.json()
-            llm_response = LLMResponse.model_validate(llm_response_as_json)
+                    if response.status_code == 404 and error_type == "model_not_found":
+                        raise ModelNotFoundException(error_msg)
+                    elif response.status_code == 400 and error_type == "internal_conversion_error":
+                        raise InternalConversionException(error_msg)
+                    elif response.status_code == 429 and error_type == "service_throttling":
+                        raise ServiceCallThrottlingException(error_msg)
+                    elif response.status_code == 422 and error_type == "structured_response_error":
+                        raise StructuredResponseException(
+                            error_msg,
+                            xml=error_data.get("detail", {}).get("xml", ""),
+                            return_class=error_data.get("detail", {}).get("return_class")
+                        )
+                    elif response.status_code == 502 and error_type == "service_call_error":
+                        raise ServiceCallException(error_msg)
+                    else:
+                        raise ServiceCallException(f"Unexpected error: {error_msg}")
 
-            # Manually convert to StructuredResponse if needed
-            if response_format is LLMResponseFormat.XML and response_class is not str:
-                llm_response.output = response_class.from_text(llm_response.output)
+                llm_response_as_json = response.json()
+                llm_response = LLMResponse.model_validate(llm_response_as_json)
 
-            return llm_response
+                # Manually convert to StructuredResponse if needed
+                if response_format is LLMResponseFormat.XML and response_class is not str:
+                    llm_response.output = response_class.from_text(llm_response.output)
+
+                return llm_response
+
+            except httpx.RequestError as e:
+                raise ServiceCallException(f"Failed to connect to server: {str(e)}")

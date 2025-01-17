@@ -13,10 +13,14 @@ class ServiceCallException(BaseException):
     """Exception raised when a service call fails."""
     pass
 
-class ServiceCallThrottlingException(ServiceCallException):
+class ServiceCallThrottlingException(BaseException):
     """Exception raised when a service call is throttled."""
     pass
 
 class InternalConversionException(BaseException):
     """Exception raised when internal conversion fails."""
+    pass
+
+class ModelNotFoundException(BaseException):
+    """Exception raised when the model is not found on the backend."""
     pass

@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.gzip import GZipMiddleware
 
 from llm_serv.api import get_llm_service
+from llm_serv.exceptions import InternalConversionException, ServiceCallException, ServiceCallThrottlingException, StructuredResponseException
 from llm_serv.providers.base import LLMRequest, LLMResponse
 from llm_serv.registry import REGISTRY, Model
 
@@ -48,11 +49,7 @@ def create_app() -> FastAPI:
     # Add compression middleware - compress responses > 1KB
     app.add_middleware(
         GZipMiddleware,
-        minimum_size=1000,  # 1KB
-        content_types=[
-            'application/json',
-            'text/plain',
-        ]
+        minimum_size=1000  # 1KB
     )
 
     # Add error handlers
@@ -76,7 +73,13 @@ async def list_models() -> list[Model]:
         return models
     except Exception as e:
         logger.error(f"Failed to list models: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve model list: {str(e)}") from e
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "registry_error",
+                "message": f"Failed to retrieve model list: {str(e)}"
+            }
+        ) from e
 
 
 @app.get("/list_providers")
@@ -88,7 +91,13 @@ async def list_providers() -> list[str]:
         return providers
     except Exception as e:
         logger.error(f"Failed to list providers: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve provider list: {str(e)}") from e
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "registry_error",
+                "message": f"Failed to retrieve provider list: {str(e)}"
+            }
+        ) from e
 
 
 @app.post("/chat/{model_provider}/{model_name}")
@@ -96,6 +105,19 @@ async def chat(model_provider: str, model_name: str, request: LLMRequest) -> LLM
     try:
         logger.info(f"Chatting with model {model_provider}/{model_name}")
         logger.info(f"Request: {request}")
+        
+        # First of all, check if the model is available
+        try:
+            model = REGISTRY.get_model(provider=model_provider, name=model_name)
+        except ValueError as e:
+            logger.error(f"Model not found: {model_provider}/{model_name}")
+            raise HTTPException(
+                status_code=404, 
+                detail={
+                    "error": "model_not_found",
+                    "message": f"Model {model_provider}/{model_name} not found"
+                }
+            ) from e
 
         # Increment chat request counters
         app.state.chat_request_count += 1
@@ -108,32 +130,67 @@ async def chat(model_provider: str, model_name: str, request: LLMRequest) -> LLM
                 "tokens": {"input": 0, "completion": 0, "total": 0},
             }
 
-        try:
-            model = REGISTRY.get_model(provider=model_provider, name=model_name)
-        except KeyError as e:
-            logger.error(f"Model not found: {model_provider}/{model_name}")
-            raise HTTPException(status_code=404, detail=f"Model {model_provider}/{model_name} not found") from e
-
+        # Now, get the LLM service and call it
         try:
             llm_service = get_llm_service(model)
             response = llm_service(request)
+        except InternalConversionException as e:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "internal_conversion_error",
+                    "message": str(e)
+                }
+            ) from e
+        except ServiceCallThrottlingException as e:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "service_throttling",
+                    "message": str(e)
+                }
+            ) from e
+        except StructuredResponseException as e:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "error": "structured_response_error",
+                    "message": str(e),
+                    "xml": e.xml,
+                    "return_class": str(e.return_class) if e.return_class else None
+                }
+            ) from e
+        except ServiceCallException as e:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "error": "service_call_error",
+                    "message": str(e)
+                }
+            ) from e
         except Exception as e:
             logger.error(f"LLM service error: {str(e)}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Error processing chat request: {str(e)}") from e
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "error": "internal_server_error",
+                    "message": f"Error processing chat request: {str(e)}"
+                }
+            ) from e
 
         logger.info(f"Response: {response}")
 
         # Update both global and model-specific token counts
         try:
-            app.state.total_tokens["input"] += response.usage.prompt_tokens
-            app.state.total_tokens["completion"] += response.usage.completion_tokens
-            app.state.total_tokens["total"] += response.usage.total_tokens
+            app.state.total_tokens["input"] += response.tokens.input_tokens
+            app.state.total_tokens["completion"] += response.tokens.completion_tokens
+            app.state.total_tokens["total"] += response.tokens.total_tokens
 
             # Update model-specific metrics
             app.state.model_usage[model_key]["chat_request_count"] += 1
-            app.state.model_usage[model_key]["tokens"]["input"] += response.usage.prompt_tokens
-            app.state.model_usage[model_key]["tokens"]["completion"] += response.usage.completion_tokens
-            app.state.model_usage[model_key]["tokens"]["total"] += response.usage.total_tokens
+            app.state.model_usage[model_key]["tokens"]["input"] += response.tokens.input_tokens
+            app.state.model_usage[model_key]["tokens"]["completion"] += response.tokens.completion_tokens
+            app.state.model_usage[model_key]["tokens"]["total"] += response.tokens.total_tokens
         except Exception as e:
             logger.error(f"Error updating metrics: {str(e)}", exc_info=True)
             # Don't raise here - metrics errors shouldn't affect the response
@@ -144,7 +201,13 @@ async def chat(model_provider: str, model_name: str, request: LLMRequest) -> LLM
         raise  # Re-raise HTTP exceptions as-is
     except Exception as e:
         logger.error(f"Unexpected error in chat endpoint: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An unexpected error occurred processing your request") from e
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_server_error",
+                "message": "An unexpected error occurred processing your request"
+            }
+        ) from e
 
 
 @app.get("/health")
