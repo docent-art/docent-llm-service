@@ -1,24 +1,59 @@
 import base64
 import os
-from typing import Optional
-from pydantic import BaseModel, Field
+from typing import Optional, Annotated
+from pydantic import BaseModel, Field, GetJsonSchemaHandler, PlainSerializer, PlainValidator
+from typing_extensions import Annotated
 from colorama import init, Fore
 
-
 class Document(BaseModel):
+    """
+    The document class handles the loading, saving, and serialization of documents.
+    It can store text or binary data.    
+    """
+
     model_config = {
         "arbitrary_types_allowed": True
     }
-    
-    content: bytes
+        
+    _content_base64: str  # base64 encoded string
+    _is_binary: bool = False  # this is true if the content is binary
     
     name: Optional[str] = None
     path: Optional[str] = None
     extension: Optional[str] = None  # this is the format, like 'pdf'|'csv'|'doc'|'docx'|'xls'|'xlsx'|'html'|'txt'|'md'
     size: Optional[int] = None
     encoding: str = 'utf-8'
-    
     meta: dict = {}
+
+    @property
+    def content(self) -> bytes | str:
+        """Returns the content in its original form (bytes or str)"""
+        if self._is_binary:
+            return base64.b64decode(self._content_base64)
+        else:
+            return base64.b64decode(self._content_base64).decode(self.encoding)
+
+    def model_dump(self, **kwargs):
+        data = super().model_dump(**kwargs)
+        # Ensure content is properly encoded
+        data['_content_base64'] = self._content_base64
+        data['_is_binary'] = self._is_binary
+        return data
+
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        if isinstance(obj, dict):
+            # Ensure content is properly encoded
+            if '_content_base64' not in obj:
+                content = obj.pop('content', None)
+                if content is not None:
+                    if isinstance(content, bytes):
+                        obj['_is_binary'] = True
+                        obj['_content_base64'] = base64.b64encode(content).decode()
+                    else:
+                        obj['_is_binary'] = False
+                        obj['_content_base64'] = base64.b64encode(str(content).encode()).decode()
+        return super().model_validate(obj, **kwargs)
 
     @classmethod
     def load(cls, file_path: str) -> 'Document':
@@ -33,36 +68,54 @@ class Document(BaseModel):
             extension = os.path.splitext(file_path)[1].lstrip('.').lower()
             path = os.path.dirname(os.path.abspath(file_path))
             size = os.path.getsize(file_path)
-            encoding = 'utf-8' # to do: detect encoding
+            
+            # Try to decode as text
+            is_binary = True
+            try:
+                content.decode('utf-8')
+                is_binary = False
+            except UnicodeDecodeError:
+                pass
 
             return cls(
-                content=content,
+                _content_base64=base64.b64encode(content).decode(),
+                _is_binary=is_binary,
                 path=path,
                 name=name,
                 extension=extension,
                 size=size,
-                encoding=encoding
-            )        
+                encoding='utf-8'
+            )
         except Exception as e:
             raise IOError(f"Failed to load document from {file_path}: {str(e)}")
 
+    def save(self, path: str) -> None:
+        try:
+            with open(path, 'wb') as f:
+                f.write(self.content)
+            self.path = os.path.dirname(os.path.abspath(path))
+            self.name = os.path.splitext(os.path.basename(path))[0]
+            self.extension = os.path.splitext(path)[1].lstrip('.').lower()
+            self.size = len(self.content)
+        except Exception as e:
+            raise IOError(f"Failed to save document to {path}: {str(e)}")
 
-    def to_json(self) -> dict:
-        if not self.content:
-            raise ValueError("No document content available")
-        
-        return {
-            "content": base64.b64encode(self.content).decode(),
-            **self.model_dump(exclude={"content"})
-        }
-    
     @classmethod
-    def from_bytes(cls, bytes_data: bytes, encoding: str = 'utf-8') -> 'Document': # TODO not ok, no name, no path, no extension
+    def from_bytes(cls, bytes_data: bytes, encoding: str = 'utf-8') -> 'Document':
         if not bytes_data:
             raise ValueError("Empty bytes input")
             
+        # Try to decode as text
+        is_binary = True
+        try:
+            bytes_data.decode('utf-8')
+            is_binary = False
+        except UnicodeDecodeError:
+            pass
+
         return cls(
-            content=bytes_data,
+            _content_base64=base64.b64encode(bytes_data).decode(),
+            _is_binary=is_binary,
             size=len(bytes_data),
             path="",
             name="",
@@ -79,9 +132,19 @@ class Document(BaseModel):
             response = requests.get(url)
             response.raise_for_status()
             
+            content = response.content
+            # Try to decode as text
+            is_binary = True
+            try:
+                content.decode('utf-8')
+                is_binary = False
+            except UnicodeDecodeError:
+                pass
+
             return cls(
-                content=response.content,
-                size=len(response.content),
+                _content_base64=base64.b64encode(content).decode(),
+                _is_binary=is_binary,
+                size=len(content),
                 path="",
                 name=os.path.splitext(os.path.basename(url))[0],
                 extension=os.path.splitext(url)[1].lstrip('.').lower(),
@@ -90,50 +153,7 @@ class Document(BaseModel):
         except requests.RequestException as e:
             raise ValueError(f"Failed to fetch document from URL: {str(e)}")
 
-    @classmethod
-    def from_json(cls, json_data: dict) -> 'Document':
-        if not json_data or 'content' not in json_data:
-            raise ValueError("Invalid JSON data: missing 'content' field")
-            
-        try:
-            content_data = json_data.pop('content')
-            content = base64.b64decode(content_data)
-            return cls(content=content, **json_data)
-        except Exception as e:
-            raise ValueError(f"Failed to parse JSON data: {str(e)}")
-
-    def save(self, path: str) -> None:
-        try:
-            with open(path, 'wb') as f:
-                f.write(self.content)
-            self.path = os.path.dirname(os.path.abspath(path))
-            self.name = os.path.splitext(os.path.basename(path))[0]
-            self.extension = os.path.splitext(path)[1].lstrip('.').lower()
-            self.size = len(self.content)
-        except Exception as e:
-            raise IOError(f"Failed to save document to {path}: {str(e)}")
-
-    @classmethod
-    def load(cls, path: str, encoding: str = 'utf-8') -> 'Document':
-        if not path:
-            raise ValueError("Empty path provided")
-            
-        try:
-            with open(path, 'rb') as f:
-                content = f.read()
-            
-            return cls(
-                content=content,
-                path=os.path.dirname(os.path.abspath(path)),
-                name=os.path.splitext(os.path.basename(path))[0],
-                extension=os.path.splitext(path)[1].lstrip('.').lower(),
-                size=os.path.getsize(path),
-                encoding=encoding
-            )
-        except Exception as e:
-            raise IOError(f"Failed to load document from {path}: {str(e)}")
-
-
+    
 def main():
     import json
     import requests
@@ -145,7 +165,6 @@ def main():
     
     # Test 1: PDF Document from URL
     print("\n=== Test 1: PDF Document ===")
-    # Using a small, reliable PDF from Mozilla's PDF.js examples
     pdf_url = "https://raw.githubusercontent.com/mozilla/pdf.js/master/examples/learning/helloworld.pdf"
     print(f"Downloading PDF from {pdf_url}")
     saved_files = []
@@ -165,7 +184,7 @@ def main():
         
         try:
             with open("test_document.pdf.json", 'w') as f:
-                json.dump(pdf_doc.to_json(), f)
+                json.dump(pdf_doc.model_dump(), f)
             saved_files.append("test_document.pdf.json")
             print(f"{SUCCESS} Saved PDF to JSON")
         except Exception as e:
@@ -174,7 +193,7 @@ def main():
         # Load back and compare
         try:
             with open("test_document.pdf.json", 'r') as f:
-                loaded_pdf = Document.from_json(json.load(f))
+                loaded_pdf = Document.model_validate(json.load(f))
             print(f"{SUCCESS} Loaded PDF from JSON")
             
             # Verify content
@@ -199,12 +218,13 @@ And some unicode characters:
 - Russian: Привет
 - Arabic: مرحبا
 - Emojis: 🌟 🌍 🚀
-"""
+""".encode('utf-8')
     
     try:
-        # Create text document
+        # Create text document using the new base64 fields
         text_doc = Document(
-            content=content,
+            _content_base64=base64.b64encode(content).decode(),
+            _is_binary=False,
             name="test",
             extension="txt",
             encoding='utf-8'
@@ -227,7 +247,7 @@ And some unicode characters:
         json_file = "test_document.json"
         try:
             with open(json_file, 'w', encoding='utf-8') as f:
-                json.dump(text_doc.to_json(), f, ensure_ascii=False)
+                json.dump(text_doc.model_dump(), f, ensure_ascii=False)
             saved_files.append(json_file)
             print(f"{SUCCESS} Saved to JSON: {json_file}")
         except Exception as e:
@@ -236,7 +256,7 @@ And some unicode characters:
         # Load from JSON and verify
         try:
             with open(json_file, 'r', encoding='utf-8') as f:
-                loaded_doc = Document.from_json(json.load(f))
+                loaded_doc = Document.model_validate(json.load(f))
             print(f"{SUCCESS} Loaded from JSON")
             
             # Verify content

@@ -9,61 +9,62 @@ from llm_serv.conversation.image import Image
 
 
 class Message(BaseModel):
+    model_config = {
+        "arbitrary_types_allowed": True,
+        "json_encoders": {
+            Image: lambda img: img.to_json()
+        }
+    }
+
     role: Role = Field(default=Role.USER)
     text: Optional[str] = None
-    # images: list[Image] = Field(default_factory=list)
+    images: list[Image] = Field(default_factory=list)
     # documents: list[Document] = Field(default_factory=list)
 
-    """@model_validator(mode='after')
+    @model_validator(mode='after')
     def validate_content_exists(self) -> 'Message':
         if not any([
             self.text is not None and len(self.text.strip()) > 0,
             len(self.images) > 0,
-            len(self.documents) > 0
+            # len(self.documents) > 0
         ]):
             raise ValueError(
                 "Message must contain at least one of: non-empty text, image, or document"
             )
         return self
-    """
 
-    def model_dump(self, **kwargs):        
-        return self.to_json()
-    
-    def to_json(self) -> dict:
-        data = self.model_dump()
+    def model_dump(self, **kwargs):
+        data = super().model_dump(**kwargs)
         
         # Handle Role enumeration
         data['role'] = self.role.value
         
         # Handle images
         if self.images:
-            data['images'] = [img.to_json() for img in self.images]
+            data['images'] = [img.model_dump() for img in self.images]
             
         # Handle documents
-        if self.documents:
+        if hasattr(self, 'documents') and self.documents:
             data['documents'] = [doc.to_json() for doc in self.documents]
             
         return data
 
     @classmethod
-    def from_json(cls, json_data: dict) -> 'Message':
-        if not json_data:
-            raise ValueError("Empty JSON data")
-            
-        # Handle Role enumeration
-        if 'role' in json_data:
-            json_data['role'] = Role(json_data['role'])
-            
-        # Handle images
-        if 'images' in json_data and json_data['images']:
-            json_data['images'] = [Image.from_json(img_data) for img_data in json_data['images']]
-            
-        # Handle documents
-        if 'documents' in json_data and json_data['documents']:
-            json_data['documents'] = [Document.from_json(doc_data) for doc_data in json_data['documents']]
-            
-        return cls(**json_data)
+    def model_validate(cls, obj, **kwargs):
+        if isinstance(obj, dict):
+            # Handle Role enumeration
+            if 'role' in obj:
+                obj['role'] = Role(obj['role'])
+                
+            # Handle images
+            if 'images' in obj and obj['images']:
+                obj['images'] = [Image.from_json(img_data) for img_data in obj['images']]
+                
+            # Handle documents
+            if 'documents' in obj and obj['documents']:
+                obj['documents'] = [Document.from_json(doc_data) for doc_data in obj['documents']]
+        
+        return super().model_validate(obj, **kwargs)
 
 
 if __name__ == "__main__":

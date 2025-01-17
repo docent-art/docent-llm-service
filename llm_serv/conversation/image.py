@@ -27,22 +27,38 @@ class Image(BaseModel):
     def format(self) -> Optional[str]:
         return self.image.format.lower() if self.image and self.image.format else None
 
-    def model_dump(self, **kwargs):        
-        return self.to_json()
-
-    def model_dump_json(self, **kwargs):        
-        return json.dumps(self.to_json())
+    def model_dump(self, **kwargs):
+        exclude = kwargs.pop('exclude', set())
+        if 'image' not in exclude:
+            # Convert image to base64 when dumping
+            result = {
+                "image": self.export_as_base64(self.image),
+                **super().model_dump(exclude={"image"}, **kwargs)
+            }
+        else:
+            result = super().model_dump(**kwargs)
+        return result
 
     @classmethod
-    def model_validate(cls, obj):
-        # Handle deserialization of base64 image data
-        if isinstance(obj, dict) and 'image' in obj and isinstance(obj['image'], str):
-            obj = obj.copy()  # Create a copy to avoid modifying the input
-            try:
-                obj['image'] = cls.import_from_base64(cls, obj['image'])
-            except Exception as e:
-                raise ValueError(f"Failed to decode base64 image data: {str(e)}")
-        return super().model_validate(obj)
+    def model_validate(cls, obj, **kwargs):
+        if isinstance(obj, str):
+            # Handle file path input
+            return cls.load(obj)
+        elif isinstance(obj, dict):
+            if 'image' in obj and isinstance(obj['image'], str):
+                # Check if it's a file path or base64
+                if os.path.exists(obj['image']):
+                    img = cls.load(obj['image'])
+                    # Merge any additional fields from obj
+                    return cls(**{**obj, 'image': img.image})
+                else:
+                    # Assume base64
+                    try:
+                        obj = obj.copy()
+                        obj['image'] = cls.import_from_base64(cls, obj['image'])
+                    except Exception as e:
+                        raise ValueError(f"Failed to decode base64 image data: {str(e)}")
+        return super().model_validate(obj, **kwargs)
 
     def set_format(self, new_format: str):
         if not self.image:
@@ -86,15 +102,6 @@ class Image(BaseModel):
     def import_from_base64(self, base64_str: str) -> PILImage.Image:
         return self.bytes_to_pil(base64.b64decode(base64_str))
 
-    def to_json(self) -> dict:
-        if not self.image:
-            raise ValueError("No image data available")
-        
-        return {
-            "image": self.export_as_base64(self.image),
-            **self.model_dump(exclude={"image"})
-        }
-    
     @classmethod
     def from_bytes(cls, bytes_data: bytes) -> 'Image':
         if not bytes_data:
@@ -133,22 +140,9 @@ class Image(BaseModel):
         except requests.RequestException as e:
             raise ValueError(f"Failed to fetch image from URL: {str(e)}")
 
-    @classmethod
-    def from_json(cls, json_data: dict) -> 'Image':
-        if not json_data or 'image' not in json_data:
-            raise ValueError("Invalid JSON data: missing 'image' field")
-            
-        try:
-            image_data = json_data.pop('image')  # Remove image field to avoid duplicate processing
-            img = cls.import_from_base64(cls, image_data)
-            return cls(image=img, **json_data)
-        except Exception as e:
-            raise ValueError(f"Failed to parse JSON data: {str(e)}")
-
     def save(self, path: str):        
         self.image.save(path)
 
-    
     @staticmethod
     def load(path: str) -> 'Image':
         if not path:
@@ -173,77 +167,3 @@ class Image(BaseModel):
             return image
         except Exception as e:
             raise IOError(f"Failed to load image from {path}: {str(e)}")
-
-
-if __name__ == "__main__":
-    import json
-    import os
-    from colorama import init, Fore
-    init()
-    
-    SUCCESS = f"{Fore.GREEN}✓{Fore.RESET}"
-    FAILURE = f"{Fore.RED}✗{Fore.RESET}"
-
-    # 1. Download and create image
-    try:
-        url = "https://www.gstatic.com/webp/gallery/1.webp"
-        print(f"\n=== Test 1: Image Download and Creation ===")
-        print(f"Downloading image from {url}")
-        img = Image.from_url(url)
-        print(f"{SUCCESS} Image downloaded and created successfully")
-        
-        # 2. Print properties
-        print("\nImage properties:")
-        print(f"{SUCCESS} Name: {img.name}")
-        print(f"{SUCCESS} Extension: {img.format}")
-        print(f"{SUCCESS} Dimensions: {img.width}x{img.height}")
-        print(f"{SUCCESS} Path: {img.path}")
-        print(f"{SUCCESS} EXIF data entries: {len(img.exif)}")
-        
-        # 3. Save in different formats
-        print("\n=== Test 2: Format Conversion ===")
-        formats = ['webp', 'jpg', 'png']
-        saved_files = []
-        
-        for fmt in formats:
-            filename = f"test_image.{fmt}"
-            try:
-                img.save(filename)
-                saved_files.append(filename)
-                print(f"{SUCCESS} Saved as {filename}")
-            except Exception as e:
-                print(f"{FAILURE} Failed to save as {filename}: {e}")
-        
-        # 4. Save as JSON
-        print("\n=== Test 3: JSON Serialization ===")
-        json_file = "test_image.json"
-        try:
-            with open(json_file, 'w') as f:
-                json.dump(img.to_json(), f)
-            saved_files.append(json_file)
-            print(f"{SUCCESS} Saved to JSON: {json_file}")
-            
-            # 5. Load from JSON
-            with open(json_file, 'r') as f:
-                loaded_img = Image.from_json(json.load(f))
-            print(f"{SUCCESS} Loaded from JSON successfully")
-            
-            # 6. Verify loaded image
-            print("\nVerifying loaded image:")
-            dimensions_match = img.width == loaded_img.width and img.height == loaded_img.height
-            print(f"{SUCCESS if dimensions_match else FAILURE} Dimensions match: {img.width}x{img.height} vs {loaded_img.width}x{loaded_img.height}")
-            
-        except Exception as e:
-            print(f"{FAILURE} JSON serialization test failed: {e}")
-        
-        # 7. Clean up
-        print("\n=== Cleanup ===")
-        for file in saved_files:
-            try:
-                os.remove(file)
-                print(f"{SUCCESS} Removed: {file}")
-            except Exception as e:
-                print(f"{FAILURE} Error removing {file}: {e}")
-                
-    except Exception as e:
-        print(f"{FAILURE} Main test failed: {e}")

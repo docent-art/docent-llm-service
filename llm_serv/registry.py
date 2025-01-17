@@ -11,9 +11,10 @@ class Model(BaseModel):
     name: str    
     id: str
     max_tokens: int
-    max_output_tokens: int    
+    max_output_tokens: int        
+    image_support: bool = False
+    document_support: bool = False
     config: dict = {}   
-
 
 class Registry:
     _instance = None

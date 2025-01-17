@@ -22,6 +22,12 @@ boto3 = "1.35.99"
 openai = "^1.59.7"
 python-dotenv = "^1.0.1"
 
+[tool.pdm.dev-dependencies]
+test = [
+    "pytest>=7.4.4",
+    "requests-mock>=1.11.0",
+]
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

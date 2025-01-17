@@ -8,6 +8,7 @@ from rich import print as rprint
 from llm_serv.structured_response.from_text import response_from_xml
 from llm_serv.structured_response.to_text import response_to_xml
 
+
 class StructuredResponse(BaseModel):
     class Config:
         validate_assignment=False

@@ -33,29 +33,29 @@ def response_to_xml(object: Type['StructuredResponse'], exclude_fields: List[str
     calling this will generate the following examples:
    
     <response>
-        <a_string>[string]</a_string>
-        <a_string_none>[string]</a_string_none> <!-- if null or not applicable leave this element empty -->
-        <a_int>[integer]</a_int>
-        <a_int_list><!-- if null or not applicable leave this element empty -->
-            <int_element>[integer]</int_element>
+        <a_string type="string">[string]</a_string>
+        <a_string_none type="string">[string]</a_string_none> <!-- if null or not applicable leave this element empty -->
+        <a_int type="integer">[integer]</a_int>
+        <a_int_list type="list"><!-- if null or not applicable leave this element empty -->
+            <int_element type="integer">[integer]</int_element>
             ...
         </a_int_list>
-        <a_enum>[One of: type1, type2]</a_enum>
-        <a_float>[float]</a_float>
-        <a_float_list_optional>
-            <a_float_list_optional_element>[float]</a_float_list_optional_element>
+        <a_enum type="enum">[One of: type1, type2]</a_enum>
+        <a_float type="float">[float]</a_float>
+        <a_float_list_optional type="list"><!-- if null or not applicable leave this element empty -->
+            <a_float_list_optional_element type="float">[float]</a_float_list_optional_element>
             ...
         </a_float_list_optional>
-        <a_optional_subclass> <!-- if null or not applicable leave this element empty -->
+        <a_optional_subclass type="class"> <!-- if null or not applicable leave this element empty -->
             <subclass>
                 <value>[integer]</value>
             </subclass>
         </a_optional_subclass>
-        <a_date>[date]</a_date>
-        <a_datetime>[datetime]</a_datetime>
-        <a_time>[time]</a_time>
-        <a_optional_list_of_subclass>
-            <a_optional_list_of_subclass_element>
+        <a_date type="date">[date]</a_date>
+        <a_datetime type="datetime">[datetime]</a_datetime>
+        <a_time type="time">[time]</a_time>
+        <a_optional_list_of_subclass type="list"><!-- if null or not applicable leave this element empty -->
+            <a_optional_list_of_subclass_element type="class">
                 <subclass>
                     <value>[integer]</value>
                 </subclass>
@@ -67,9 +67,9 @@ def response_to_xml(object: Type['StructuredResponse'], exclude_fields: List[str
     Rules for XML generation:
 
     1. Basic Structure:
-       - Each field gets its own XML tag using the field name: <field_name>...</field_name>
+       - Each field gets its own XML tag using the field name: <field_name type="data type">...</field_name>
        - Indent each level with 4 spaces
-       - Root class uses <response> as tag name, nested classes use their lowercase class name
+       - Root class uses <response> as tag name, no type required as it's always a class, nested classes use their lowercase class name
     
     2. Optional Fields:
        - Add comment after opening tag: <!-- if null or not applicable leave this element empty -->
@@ -78,23 +78,34 @@ def response_to_xml(object: Type['StructuredResponse'], exclude_fields: List[str
     3. Basic Types:
        - Format as [type_name] between tags
        - Use 'integer' for int, 'string' for str, 'float' for float
-       - Special handling for date/time:
+       - Special handling for date/time (types):
          - date: [date]
          - time: [time]
          - datetime: [datetime]
     
     4. Enums:
        - Format as: [One of: value1, value2, ...]
+       - Type is "enum"
        - Values are comma-separated
        - Use actual enum values, not names
     
     5. Lists:
        - Create wrapper tag using field name
-       - Each element uses <field_name_element> tags
+       - Type in main list element is "list"
+       - Each element uses <field_name_element> tag (append the "_element" suffix)
        - Add "..." after elements to indicate repetition
-       - For basic types:
-           <field_name>
-               <field_name_element>[type]</field_name_element>
+       - For basic types or list of lists:
+           <field_name type="list">
+               <field_name_element type="data type">[data type]</field_name_element>
+               ...
+           </field_name>
+        - For class types:
+            <field_name type="list">
+               <field_name_element type="class">
+                   <subclass>
+                       [nested fields...]
+                   </subclass>
+               </field_name_element>
                ...
            </field_name>
     
@@ -102,14 +113,14 @@ def response_to_xml(object: Type['StructuredResponse'], exclude_fields: List[str
        - Include full structure of nested class
        - Maintain proper indentation for nested elements
        - For single objects:
-           <field_name>
+           <field_name type="class">
                <class_name>
                    [nested fields...]
                </class_name>
            </field_name>
        - For lists of objects:
-           <field_name>
-               <field_name_element>
+           <field_name type="list">
+               <field_name_element type="class">
                    <class_name>
                        [nested fields...]
                    </class_name>
@@ -124,9 +135,7 @@ def response_to_xml(object: Type['StructuredResponse'], exclude_fields: List[str
     
     8. Tag Naming:
        - Use exact field names for main tags
-       - For list elements:
-         - Basic types: use <field_name_element>
-         - Complex types: use combination of field name and 'element'
+       - For list elements append the "_element" suffix         
     
     9. Comments and Whitespace:
        - Optional field comments go on same line as opening tag
@@ -152,9 +161,10 @@ def response_to_xml(object: Type['StructuredResponse'], exclude_fields: List[str
 
     def generate_example_xml(object: Type['StructuredResponse'], indent_level: int = 0, exclude_fields: List[str] = []) -> list[str]:
         lines = []
-        indent = "    " * indent_level  # Rule 1: Indent each level with 4 spaces
+        indent = "    " * indent_level
         tag_name = "response" if indent_level == 0 else object.__name__.lower()
         
+        # Root response tag doesn't need type attribute
         lines.append(f"{indent}<{tag_name}>")
         
         for field_name, field_info in object.model_fields.items():
@@ -163,32 +173,31 @@ def response_to_xml(object: Type['StructuredResponse'], exclude_fields: List[str
             
             field_type = field_info.annotation
             
-            # Rule 2: Optional Fields handling
             is_optional = get_origin(field_type) is Union and type(None) in get_args(field_type)
             if is_optional:
                 field_type = next(arg for arg in get_args(field_type) if arg is not type(None))
             
             # Rule 5: Lists handling
             if get_origin(field_type) is list:
-                field_start = f"{indent}    <{field_name}>"
+                field_start = f'{indent}    <{field_name} type="list">'
                 if is_optional:
                     field_start += "<!-- if null or not applicable leave this element empty -->"
                 lines.append(field_start)
                 
                 element_type = get_args(field_type)[0]
                 if isinstance(element_type, type) and issubclass(element_type, BaseModel):
-                    lines.append(f"{indent}        <{field_name}_element>")
+                    lines.append(f'{indent}        <{field_name}_element type="class">')
                     lines.extend(generate_example_xml(element_type, indent_level + 3, exclude_fields))
                     lines.append(f"{indent}        </{field_name}_element>")
                     lines.append(f"{indent}        ...")
                 else:
                     type_name = "integer" if element_type is int else element_type.__name__.lower()
-                    lines.append(f"{indent}        <{field_name}_element>[{type_name}]</{field_name}_element>")
+                    lines.append(f'{indent}        <{field_name}_element type="{type_name}">[{type_name}]</{field_name}_element>')
                     lines.append(f"{indent}        ...")
                 lines.append(f"{indent}    </{field_name}>")
                 
             elif isinstance(field_type, type) and issubclass(field_type, BaseModel):
-                field_start = f"{indent}    <{field_name}>"
+                field_start = f'{indent}    <{field_name} type="class">'
                 if is_optional:
                     field_start += "<!-- if null or not applicable leave this element empty -->"
                 lines.append(field_start)
@@ -200,12 +209,15 @@ def response_to_xml(object: Type['StructuredResponse'], exclude_fields: List[str
                 if field_type in (date, datetime, time):
                     type_name = field_type.__name__.lower()
                 elif isinstance(field_type, type) and issubclass(field_type, Enum):
+                    type_name = "enum"
                     values = [str(e.value) for e in field_type]
-                    type_name = f"One of: {', '.join(values)}"
+                    value_text = f"One of: {', '.join(values)}"
                 else:
                     type_name = "integer" if field_type is int else "string" if field_type is str else "float" if field_type is float else field_type.__name__.lower()
+                    value_text = type_name
                 
-                line = f"{indent}    <{field_name}>[{type_name}]</{field_name}>"
+                line = f'{indent}    <{field_name} type="{type_name}">'
+                line += f"[{value_text}]</{field_name}>"
                 if is_optional:
                     line += "<!-- if null or not applicable leave this element empty -->"
                 lines.append(line)

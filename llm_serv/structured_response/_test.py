@@ -3,13 +3,15 @@ This test file is for testing the StructuredResponse class with all complex type
 """
 
 from datetime import date, datetime, time
+from enum import Enum
 from rich import print as rprint
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 from pydantic import Field
-from llm_serv.structured_response.model import StructuredResponse
-from llm_serv.types import Enumeration
 
-class AnEnum(Enumeration):
+from llm_serv.structured_response.model import StructuredResponse
+
+
+class AnEnum(Enum):
     TYPE1 = "type1"
     TYPE2 = "type2"
 
@@ -48,60 +50,61 @@ if __name__ == "__main__":
 
     xml_text = """```xml
     <response>
-    <example_string>[string]</example_string><example_int>2</example_int>    
-    <example_int_list>
-        <example_int_list_element>2</example_int_list_element>
-        <example_int_list_element>3</example_int_list_element>
+    <example_string type="string">[string]</example_string><example_int>2</example_int>    
+    <example_int_list  type="list">
+        <example_int_list_element type="integer">2</example_int_list_element>
+        <example_int_list_element type="integer">3</example_int_list_element>
     </example_int_list>
-    <example_enum>type2</example_enum>
-    <example_float>1.2</example_float>
-    <example_float_list_optional></example_float_list_optional>
-    <example_optional_subclasstype1><!-- if null or not applicable leave this element empty -->
+    <example_enum type="enum">type2</example_enum>
+    <example_float type="float">1.2</example_float>
+    <example_float_list_optional type="float"></example_float_list_optional>
+    <example_optional_subclasstype1 type="class"><!-- if null or not applicable leave this element empty -->
         <subclasstype1>
-            <sub_string> another string </sub_string>
+            <sub_string type="string"> another string </sub_string>
         </subclasstype1>
     </example_optional_subclasstype1>
-    <example_nested_subclasstype3>
+    <example_nested_subclasstype3 type="class">
         <subclasstype3>
-            <element1>
+            <element1 type="class">
                 <subclasstype1>
-                    <sub_string>[string]</sub_string>
+                    <sub_string type="string">[string]</sub_string>
                 </subclasstype1>
             </element1>
-            <element_sublist>
-                <element_sublist_element>
+            <element_sublist type="list">
+                <element_sublist_element type="class">
                     <subclasstype2>
-                        <sub_list>
-                            <sub_list_element>[str]</sub_list_element>
+                        <sub_list type="list">
+                            <sub_list_element type="string">[str]</sub_list_element>
                         </sub_list>
                     </subclasstype2>
                 </element_sublist_element>                
             </element_sublist>
         </subclasstype3>
     </example_nested_subclasstype3>
-    <example_date>20 Jan 2023</example_date>
-    <example_datetime>15.10.2023 12:00:00</example_datetime>
-    <example_time>3 PM</example_time>
-            <example_list>
-        <example_list_element>
+    <example_int type="integer">2</example_int>
+    <example_date type="date">20 Jan 2023</example_date>
+    <example_datetime type="datetime">15.10.2023 12:00:00</example_datetime>
+    <example_time type="time">3 PM</example_time>
+            <example_list type="list">
+        <example_list_element type="class">
             <subclasstype1>
-                <sub_string> a 
+                <sub_string type="string"> a 
                                
                 string 
 </sub_string>
             </subclasstype1>
-        </example_list_element><example_list_element>
-            <subclasstype1><sub_string>string 2</sub_string></subclasstype1></example_list_element></example_list>
-    <example_optional_list_of_subclasstype1><!-- if null or not applicable leave this element empty -->
-        <example_optional_list_of_subclasstype1_element>
+        </example_list_element><example_list_element type="class">
+            <subclasstype1><sub_string type="string">string 2</sub_string></subclasstype1></example_list_element></example_list>
+    <example_optional_list_of_subclasstype1 type="list"><!-- if null or not applicable leave this element empty -->
+        <example_optional_list_of_subclasstype1_element type="class">
             <subclasstype1>
-                <sub_string>[string 1]</sub_string>
+                <sub_string type="string">[string 1]</sub_string>
             </subclasstype1>
         </example_optional_list_of_subclasstype1_element>
 
-        <example_optional_list_of_subclasstype1_element>
+        <example_optional_list_of_subclasstype1_element type="class">
             <subclasstype1>
-                <sub_string>[string 2]</sub_string>
+                <sub_string type="string">[string 2]</sub_string>
             </subclasstype1>
         </example_optional_list_of_subclasstype1_element>
     </example_optional_list_of_subclasstype1>
