@@ -44,7 +44,7 @@ class TestStructuredResponse(StructuredResponse):
 
 if __name__ == "__main__":
     print("Testing StructuredResponse with all complex types")
-    xml_text = TestStructuredResponse.to_xml(exclude_fields=["example_int"])
+    xml_text = TestStructuredResponse.to_text(exclude_fields=["example_int"])
     
     print(xml_text)
 
@@ -113,7 +113,7 @@ if __name__ == "__main__":
     print("\n"+"="*120)
     print("Testing StructuredResponse from XML")
     print("="*120)
-    response = TestStructuredResponse.from_xml(xml_text)
+    response = TestStructuredResponse.from_text(xml_text)
     rprint(response)
     
 

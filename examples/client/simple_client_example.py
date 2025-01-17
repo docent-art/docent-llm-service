@@ -39,7 +39,7 @@ import asyncio
 from llm_serv.client import LLMServiceClient
 from llm_serv.conversation.conversation import Conversation
 from llm_serv.providers.base import LLMRequest
-
+from rich import print as rprint
 
 async def main():
     # 1. Initialize the client
@@ -67,7 +67,11 @@ async def main():
     request = LLMRequest(conversation=conversation)
     response = await client.chat(request)
 
-    print("Response:", response)
+    rprint("Full Response:", response)
+
+    rprint("Output:", response.output)
+
+    rprint("Token Usage:", response.tokens)
 
 
 if __name__ == "__main__":

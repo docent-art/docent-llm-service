@@ -205,7 +205,7 @@ if __name__ == "__main__":
     my_class = MyClass()
 
     conversation = Conversation.from_prompt("Please fill in the following class respecting the following instructions.")
-    conversation.add_text_message(role=Role.USER, content=MyClass.to_xml())
+    conversation.add_text_message(role=Role.USER, content=MyClass.to_text())
 
     request = LLMRequest(
         conversation=conversation,

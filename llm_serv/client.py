@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 from pydantic import BaseModel
 
-from llm_serv.providers.base import LLMRequest, LLMResponse
+from llm_serv.providers.base import LLMRequest, LLMResponse, LLMResponseFormat, LLMService
 from llm_serv.registry import Model
 
 
@@ -67,6 +67,9 @@ class LLMServiceClient:
         if not self.provider or not self.name:
             raise ValueError("Model is not set, please set it with client.set_model(provider, name) first!")
         
+        response_class = request.response_class
+        response_format = request.response_format
+
         async with httpx.AsyncClient() as client:            
             request_data = request.model_dump(mode='json')
             
@@ -75,5 +78,13 @@ class LLMServiceClient:
                 json=request_data
             )
             response.raise_for_status()
-            return LLMResponse.model_validate(response.json())
+
+            llm_response_as_json = response.json()
+            llm_response = LLMResponse.model_validate(llm_response_as_json)
+            
+            # Manually convert to StructuredResponse if needed
+            if response_format is LLMResponseFormat.XML and response_class is not str:
+                llm_response.output = response_class.from_text(llm_response.output)
+
+            return llm_response
         

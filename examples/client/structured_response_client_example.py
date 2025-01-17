@@ -7,6 +7,7 @@ from llm_serv.registry import REGISTRY
 from llm_serv.api import get_llm_service
 from llm_serv.conversation.conversation import Conversation
 from rich import print as rprint
+from llm_serv.client import LLMServiceClient
 
 from llm_serv.structured_response.model import StructuredResponse
 
@@ -36,32 +37,44 @@ class WeatherPrognosis(StructuredResponse):
     low: Optional[float] = Field(description="The low temperature in degrees Celsius")
 
 
-prompt = f"""
-You are a weather expert. You are given a weather forecast for a specific location.
+async def main():
+    # Initialize the client
+    client = LLMServiceClient(host="localhost", port=10000)
+    
+    # Set the model to use
+    client.set_model(provider="AWS", name="claude-3-haiku")
 
-Here is the weather forecast:
-{input_text}
+    prompt = f"""
+    You are a weather expert. You are given a weather forecast for a specific location.
 
-Here is the structured response:
-{WeatherPrognosis.to_text()}
-"""
+    Here is the weather forecast:
+    {input_text}
 
-print(prompt)
+    Here is the structured response:
+    {WeatherPrognosis.to_text()}
+    """
 
-conversation = Conversation.from_prompt(prompt)
-request = LLMRequest(conversation=conversation,
-                     response_class=WeatherPrognosis,
-                     response_format=LLMResponseFormat.XML,
-                     max_completion_tokens=4000,
-                     )
+    print(prompt)
 
-response = llm_service(request)
+    conversation = Conversation.from_prompt(prompt)
+    request = LLMRequest(conversation=conversation,
+                        response_class=WeatherPrognosis,
+                        response_format=LLMResponseFormat.XML,
+                        max_completion_tokens=4000,
+                        )
 
-print("\nResponse:")
-rprint(response.output)
+    response = await client.chat(request)
 
-print("\nToken Usage:")
-print(f"Input tokens: {response.tokens.input_tokens}")
-print(f"Output tokens: {response.tokens.completion_tokens}")
-print(f"Total tokens: {response.tokens.total_tokens}")
+    print("\nResponse:")
+    rprint(response.output)
+
+    print(f"Output type: {type(response.output)}")
+    assert isinstance(response.output, WeatherPrognosis)
+
+    rprint("Token Usage:", response.tokens)
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
 

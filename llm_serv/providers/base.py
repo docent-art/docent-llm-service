@@ -106,41 +106,6 @@ class LLMResponse(BaseModel):
     
 
 class LLMService(abc.ABC):   
-    """
-    TODO conversion to json 
-    """
-    def _convert_to_json(llm_output: str) -> tuple[dict | None, Exception | None]:
-        if not isinstance(llm_output, str): 
-            return None, Exception(f"Conversion failed as input is not a 'str'. llm_output is a {type(llm_output)}")
-        
-        llm_output = llm_output.strip() 
-
-        # give it a direct try:
-        try:
-            output = json.loads(llm_output.strip())                    
-            exception = None
-            return output, exception
-        except: 
-            pass  # no luck, manual work below
-        
-        # search for start:
-        start_index = llm_output.find('```json')
-        if start_index >= 0:
-            llm_output = llm_output[start_index+7:].strip()
-        if llm_output.endswith('```') and len(llm_output) > 3:
-            llm_output = llm_output[:-3] 
-
-        try:
-            output = json.loads(llm_output.strip())                    
-            exception = None
-        except Exception as ex:
-            output = None
-            exception = ex
-
-        return output, exception  # return exception as we need the internal message
-    
-    
-    
     @abc.abstractmethod
     def _convert(self, conversation: Conversation) -> list:
         """
@@ -170,11 +135,12 @@ class LLMService(abc.ABC):
 
         response.output = output  # assign initial string output
 
-        # TODO if JSON
-
+        """
+        Handle generic XML response format
+        """
         if request.response_format == LLMResponseFormat.XML and request.response_class is not str:
             try:
-                response.output = request.response_class.from_xml(output)                
+                response.output = request.response_class.from_text(output)                
             except Exception as e:
                 print(f"Failed to convert XML to {request.response_class.__name__}: {e}.")
                 print(f"Input messages: {messages}")

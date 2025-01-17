@@ -82,7 +82,8 @@ async def chat(
     model_name: str,
     request: LLMRequest
 ) -> LLMResponse:
-    print(f"Chatting with model {model_provider}/{model_name} ...")
+    print(f"\n Chatting with model {model_provider}/{model_name}")
+    print(request)
     model = REGISTRY.get_model(provider=model_provider, name=model_name)
     llm_service = get_llm_service(model)
     return llm_service(request)

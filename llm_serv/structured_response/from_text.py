@@ -227,8 +227,6 @@ def response_from_xml(xml: str, return_class: Type['StructuredResponse'], is_roo
     print(f"\nCompleted parsing for {return_class.__name__}")
     return return_class(**field_values)
 
-def response_from_json(json: str, is_root: bool = True) -> 'StructuredResponse':
-    pass
 
 
 if __name__ == "__main__":        
