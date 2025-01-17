@@ -175,7 +175,9 @@ For more details, see the complete example in ``examples/example_client.py``.
 - [ ] Add local LLM support 
 - [ ] Restore image capabilities
 - [ ] Restore document capabilities
-- [ ] Add XML lazy structured output support
+- [X] Add XML lazy structured output support
+    - [ ] Handle | operator, not only Optional[]
+    - [ ] Full testing for this
 - [ ] Add provider-specific structured output support
 - [ ] Add proper logging
 - [ ] Add tests
