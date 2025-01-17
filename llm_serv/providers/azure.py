@@ -8,6 +8,7 @@ from llm_serv.conversation.conversation import Conversation
 from llm_serv.conversation.image import Image
 from llm_serv.conversation.message import Message
 from llm_serv.conversation.role import Role
+from llm_serv.exceptions import ServiceCallException, ServiceCallThrottlingException
 from llm_serv.providers.base import (LLMRequest, LLMResponseFormat, LLMService,
                                      LLMTokens)
 from llm_serv.registry import Model
@@ -178,19 +179,19 @@ class AzureOpenAILLMService(LLMService):
                 total_tokens=api_response.usage.total_tokens,
             )
 
-        except Exception as exception:
-            print(str(exception))
-            if hasattr(exception, "status_code"):
-                if exception.status_code == 400:
-                    return output, tokens, exception
-                elif exception.status_code == 429:  # Retry with exponential backoff
+        except Exception as e:
+            if hasattr(e, "status_code"):
+                if e.status_code == 400:
+                    raise ServiceCallException(f"Bad request: {str(e)}")
+                elif e.status_code == 429:
                     statistics = getattr(self._service_call, "statistics", None)
-                    if statistics:
-                        print(
-                            f"Call throttling, attempt number {statistics['attempt_number']}, idle for {statistics['idle_for']:.1f} seconds, delay since first attempt {statistics['delay_since_first_attempt']:.1f} seconds."
+                    if statistics and statistics['attempt_number'] >= 5:
+                        raise ServiceCallThrottlingException(
+                            f"Azure service is throttling requests after {statistics['attempt_number']} attempts "
+                            f"over {statistics['delay_since_first_attempt']:.1f} seconds"
                         )
-                    raise exception
-            raise exception
+                    raise  # Let tenacity retry
+            raise ServiceCallException(f"Azure service error: {str(e)}")
 
         return output, tokens, exception
 

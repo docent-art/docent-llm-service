@@ -1,19 +1,22 @@
-class LLMServiceException(Exception):
-    """Base exception class for LLM Service errors"""
+class BaseException(Exception):
+    """Base exception class for all LLM service exceptions."""
     pass
 
-class InternalConversionException(LLMServiceException):
-    """Raised when there are issues with the internal conversion of the request"""
+class StructuredResponseException(BaseException):
+    """Exception raised when structured response parsing fails."""
+    def __init__(self, message: str, xml: str = "", return_class: type = None):
+        self.xml = xml
+        self.return_class = return_class
+        super().__init__(message)
+
+class ServiceCallException(BaseException):
+    """Exception raised when a service call fails."""
     pass
 
-class ServiceConnectionException(LLMServiceException):
-    """Raised when there are connection issues or any other general error with the server"""
+class ServiceCallThrottlingException(ServiceCallException):
+    """Exception raised when a service call is throttled."""
     pass
 
-class ThrottlingException(LLMServiceException):
-    """Raised when the provider is throttling requests, after the maximum number of retries has been reached"""
-    pass
-
-class StructuredResponseException(LLMServiceException):
-    """Raised when there is a problem with the structured response conversion from the LLM output to the desired StructuredResponse class"""
+class InternalConversionException(BaseException):
+    """Exception raised when internal conversion fails."""
     pass

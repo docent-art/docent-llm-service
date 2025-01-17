@@ -1,3 +1,4 @@
+from llm_serv.exceptions import StructuredResponseException
 from typing import Type, get_origin, get_args, Union, List, Optional, Any, Dict
 from enum import Enum
 from pydantic import BaseModel
@@ -97,147 +98,147 @@ def get_field_type(class_type: Type):
 
 
 def response_from_xml(xml: str, return_class: Type['StructuredResponse'], is_root: bool = True, exclude_fields: List[str] = []) -> 'StructuredResponse':
-    print(f"\nParsing XML for class {return_class.__name__}")
-    
-    # Clean input from code block markers if present
-    if "```xml" in xml:
-        xml = xml.split("```xml", 1)[1]
-        xml = xml.split("```", 1)[0]
-    
-    print(f"XML content:\n{xml}")
-    
-    # Remove XML comments
-    xml = re.sub(r'<!--.*?-->', '', xml, flags=re.DOTALL)
-    
-    # Handle root element
-    if is_root:
-        xml = xml.replace('<response>', '').replace('</response>', '')
-    
-    # Extract children elements
-    children:{} = extract_children_xml(xml)    
-    
-    # For each child, determine is there is a corresponding field name in the return_class fields
-    # If so, change the child value for "type" with the corresponding field type
-    # For example, if the name matches a subclass, change the "type" to the subclass
-    field_values = {}
-    for field in get_field_type(return_class):  
-        field_name = field["field_name"]
-        field_type = field["field_type"]
-        is_optional = field["is_optional"]
-        base_type = field["base_type"]
-        list_item_type = field["list_item_type"]
+    try:
+        print(f"\nParsing XML for class {return_class.__name__}")
         
-        if field_name in exclude_fields:
-            continue
-
-        # Skip if field not in children
-        child = None
-        for elem in children:
-            if elem["tag_name"] == field_name:
-                child = elem
-        if child is None:
-            # Check if field is optional
-            if is_optional:
-                field_values[field_name] = None
+        # Clean input from code block markers if present
+        if "```xml" in xml:
+            xml = xml.split("```xml", 1)[1]
+            xml = xml.split("```", 1)[0]
+        
+        print(f"XML content:\n{xml}")
+        
+        # Remove XML comments
+        xml = re.sub(r'<!--.*?-->', '', xml, flags=re.DOTALL)
+        
+        # Handle root element
+        if is_root:
+            xml = xml.replace('<response>', '').replace('</response>', '')
+        
+        # Extract children elements
+        children:{} = extract_children_xml(xml)    
+        
+        # For each child, determine is there is a corresponding field name in the return_class fields
+        # If so, change the child value for "type" with the corresponding field type
+        # For example, if the name matches a subclass, change the "type" to the subclass
+        field_values = {}
+        for field in get_field_type(return_class):  
+            field_name = field["field_name"]
+            field_type = field["field_type"]
+            is_optional = field["is_optional"]
+            base_type = field["base_type"]
+            list_item_type = field["list_item_type"]
+            
+            if field_name in exclude_fields:
                 continue
-            else:
-                raise Exception(f"Required field {field_name} not found in the following children: {[child['tag_name'] for child in children]}!")
-                        
-        # Get the raw content
-        tag_type = child["type"]        
-        content = child["content"]
-                
-        # Handle basic types
-        if base_type in (str, int, float):
-            field_values[field_name] = None
-            try:
-                field_values[field_name] = base_type(content)
-            except Exception as e:
-                pass
-                #print(f"Warning parsing {field_name} with type {base_type}: {e}, default to None")
-            
-        # Handle enum types
-        elif issubclass(base_type, Enum):
-            try:
-                # First try direct value lookup
-                field_values[field_name] = base_type(content)
-            except ValueError:                
-                field_values[field_name] = None
-            
-        # Handle date types
-        elif base_type == date_type:
-            parsed = dateparser.parse(content)
-            field_values[field_name] = parsed.date() if parsed else None
-            
-        # Handle time types    
-        elif base_type == time_type:
-            parsed = dateparser.parse(content)
-            field_values[field_name] = parsed.time() if parsed else None
-            
-        # Handle datetime types
-        elif base_type == datetime_type:
-            field_values[field_name] = dateparser.parse(content)
-            
-        # Handle classes from BaseModel/StructuredResponse
-        elif isinstance(base_type, type) and issubclass(base_type, BaseModel):
-            class_pattern = rf'<{base_type.__name__.lower()}>(.*?)</{base_type.__name__.lower()}>'
-            class_match = re.search(class_pattern, content, re.DOTALL)
-            if class_match:
-                field_values[field_name] = response_from_xml(class_match.group(1), base_type, False)
-            else:
-                field_values[field_name] = response_from_xml(content, base_type, False)
-            continue
 
-        # Handle lists and optional lists
-        elif base_type == list:
-            if not content:
-                # Check if the list is optional
-                is_optional = get_origin(field_type) is Union and type(None) in get_args(field_type)
-                field_values[field_name] = None if is_optional else []
-            else:
-                items = []
-                # Find all list elements
-                element_pattern = rf'<{field_name}_element.*?>(.*?)</{field_name}_element>'
-                element_matches = re.finditer(element_pattern, content, re.DOTALL)
-                
-                for match in element_matches:
-                    element_content = match.group(1).strip()
+            # Skip if field not in children
+            child = None
+            for elem in children:
+                if elem["tag_name"] == field_name:
+                    child = elem
+            if child is None:
+                # Check if field is optional
+                if is_optional:
+                    field_values[field_name] = None
+                    continue
+                else:
+                    raise Exception(f"Required field {field_name} not found in the following children: {[child['tag_name'] for child in children]}!")
+                            
+            # Get the raw content
+            tag_type = child["type"]        
+            content = child["content"]
                     
-                    if isinstance(list_item_type, type) and issubclass(list_item_type, BaseModel):
-                        # For BaseModel types, look for the class wrapper
-                        class_pattern = rf'<{list_item_type.__name__.lower()}>(.*?)</{list_item_type.__name__.lower()}>'
-                        class_match = re.search(class_pattern, element_content, re.DOTALL)
-                        
-                        if class_match:
-                            # If wrapper found, parse its content
-                            class_content = class_match.group(1)
-                            item = response_from_xml(class_content, list_item_type, False)
-                        else:
-                            # If no wrapper, parse the direct content
-                            item = response_from_xml(element_content, list_item_type, False)
-                        items.append(item)
-                    else:
-                        # For basic types, use the content directly
-                        items.append(list_item_type(element_content)) # TODO extract this to handle the same as above, not directly
+            # Handle basic types
+            if base_type in (str, int, float):
+                field_values[field_name] = None
+                try:
+                    field_values[field_name] = base_type(content)
+                except Exception as e:
+                    pass
+                    #print(f"Warning parsing {field_name} with type {base_type}: {e}, default to None")
                 
-                field_values[field_name] = items
-            
-    
-        
-    print(f"\nCompleted parsing for {return_class.__name__}")
-    return return_class(**field_values)
+            # Handle enum types
+            elif issubclass(base_type, Enum):
+                try:
+                    # First try direct value lookup
+                    field_values[field_name] = base_type(content)
+                except ValueError:                
+                    field_values[field_name] = None
+                
+            # Handle date types
+            elif base_type == date_type:
+                parsed = dateparser.parse(content)
+                field_values[field_name] = parsed.date() if parsed else None
+                
+            # Handle time types    
+            elif base_type == time_type:
+                parsed = dateparser.parse(content)
+                field_values[field_name] = parsed.time() if parsed else None
+                
+            # Handle datetime types
+            elif base_type == datetime_type:
+                field_values[field_name] = dateparser.parse(content)
+                
+            # Handle classes from BaseModel/StructuredResponse
+            elif isinstance(base_type, type) and issubclass(base_type, BaseModel):
+                class_pattern = rf'<{base_type.__name__.lower()}>(.*?)</{base_type.__name__.lower()}>'
+                class_match = re.search(class_pattern, content, re.DOTALL)
+                if class_match:
+                    field_values[field_name] = response_from_xml(class_match.group(1), base_type, False)
+                else:
+                    field_values[field_name] = response_from_xml(content, base_type, False)
+                continue
 
+            # Handle lists and optional lists
+            elif base_type == list:
+                if not content:
+                    # Check if the list is optional
+                    is_optional = get_origin(field_type) is Union and type(None) in get_args(field_type)
+                    field_values[field_name] = None if is_optional else []
+                else:
+                    items = []
+                    # Find all list elements
+                    element_pattern = rf'<{field_name}_element.*?>(.*?)</{field_name}_element>'
+                    element_matches = re.finditer(element_pattern, content, re.DOTALL)
+                    
+                    for match in element_matches:
+                        element_content = match.group(1).strip()
+                        
+                        if isinstance(list_item_type, type) and issubclass(list_item_type, BaseModel):
+                            # For BaseModel types, look for the class wrapper
+                            class_pattern = rf'<{list_item_type.__name__.lower()}>(.*?)</{list_item_type.__name__.lower()}>'
+                            class_match = re.search(class_pattern, element_content, re.DOTALL)
+                            
+                            if class_match:
+                                # If wrapper found, parse its content
+                                class_content = class_match.group(1)
+                                item = response_from_xml(class_content, list_item_type, False)
+                            else:
+                                # If no wrapper, parse the direct content
+                                item = response_from_xml(element_content, list_item_type, False)
+                            items.append(item)
+                        else:
+                            # For basic types, use the content directly
+                            items.append(list_item_type(element_content)) # TODO extract this to handle the same as above, not directly
+                    
+                    field_values[field_name] = items                
+            
+        print(f"\nCompleted parsing for {return_class.__name__}")
+        return return_class(**field_values)
+    except StructuredResponseException as e:
+        raise StructuredResponseException(f"Error parsing XML for class {return_class.__name__}: {str(e)}", xml, return_class) from e
 
 
 if __name__ == "__main__":        
     from datetime import date, datetime, time
     from rich import print as rprint
+    from enum import Enum
     from typing import Dict, List, Optional, Union
     from pydantic import Field
-    from common.ai.structured_response.model import StructuredResponse
-    from common.types import Enumeration
+    from llm_serv.structured_response.model import StructuredResponse    
 
-    class AnEnum(Enumeration):
+    class AnEnum(Enum):
         TYPE1 = "type1"
         TYPE2 = "type2"
 
@@ -268,11 +269,6 @@ if __name__ == "__main__":
         example_time: time = Field(description="A time field from today")
         example_list_of_subclasstype1: List[SubClassType1] = Field(default=[], description="A list of sub class type 1 fields")
         example_optional_list_of_subclasstype1: Optional[List[SubClassType1]] = Field(default=None, description="An optional list of sub class type 1 fields")
-
-    #rprint(get_field_type(TestStructuredResponse))
-
-    #import sys
-    #sys.exit(0)
 
 
     xml_text = """```xml

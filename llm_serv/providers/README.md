@@ -17,10 +17,10 @@ This method is implemented by each provider and calls the underlying provider di
 
 This method can raise the following exceptions:
 
-> ServiceConnectionException(LLMServiceException)
+> ServiceCallException(LLMServiceException)
 Raised when there are connection issues or any other general error with the server
 
-> ThrottlingException(LLMServiceException)
+> ServiceCallThrottlingException(LLMServiceException)
 Raised when the provider is throttling requests, after the maximum number of retries has been reached.
 
 #### `__call__`
@@ -29,8 +29,8 @@ This method is called by the `LLMService` class and ties the ``_convert`` and ``
 
 This method return the following exceptions:
 
-> ServiceConnectionException(LLMServiceException)
-> ThrottlingException(LLMServiceException)
+> ServiceCallException(LLMServiceException)
+> ServiceCallThrottlingException(LLMServiceException)
 > InternalConversionException(LLMServiceException)
 
 > StructuredResponseException(LLMServiceException)

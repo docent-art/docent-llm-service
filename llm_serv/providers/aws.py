@@ -8,6 +8,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from llm_serv.conversation.conversation import Conversation
 from llm_serv.conversation.role import Role
+from llm_serv.exceptions import InternalConversionException, ServiceCallException, ServiceCallThrottlingException
 from llm_serv.providers.base import LLMRequest, LLMResponseFormat, LLMService, LLMTokens
 from llm_serv.registry import Model
 from llm_serv.structured_response.model import StructuredResponse
@@ -31,7 +32,7 @@ def check_credentials() -> None:
 class AWSLLMService(LLMService):
     def __init__(self, model: Model):
         super().__init__(model)
-        
+
         self._context_window = model.max_tokens
         self._model_max_tokens = model.max_output_tokens
 
@@ -80,88 +81,91 @@ class AWSLLMService(LLMService):
         If you include a ContentBlock with a document field in the array, you must also include a ContentBlock with a text field.
         You can only include images and documents if the role is user.
         """
-        messages = []
-        for message in request.conversation.messages:
-            _message = {"role": message.role.value}
-            _content = []
+        try:
+            messages = []
+            for message in request.conversation.messages:
+                _message = {"role": message.role.value}
+                _content = []
 
-            # Only user messages can contain images and documents
-            # has_attachments = bool(message.images or message.documents)
-            # if has_attachments and message.role != Role.USER:
-            #    raise ValueError(f"Images and documents can only be included in user messages, not {message.role}")
+                # Only user messages can contain images and documents
+                # has_attachments = bool(message.images or message.documents)
+                # if has_attachments and message.role != Role.USER:
+                #    raise ValueError(f"Images and documents can only be included in user messages, not {message.role}")
 
-            if message.text:
-                _content.append({"text": message.text})
+                if message.text:
+                    _content.append({"text": message.text})
 
-            """if message.images:
-                # Check image count limit
-                if len(message.images) > 20:
-                    raise ValueError(f"Maximum of 20 images allowed per message, got {len(message.images)}")
-                
-                for image in message.images:
-                    # Check image size limit (3.75 MB = 3,932,160 bytes)
-                    image_bytes = image._pil_to_bytes(image.image)
-                    if len(image_bytes) > 3_932_160:
-                        raise ValueError(f"Image size must be under 3.75 MB, got {len(image_bytes)/1_048_576:.2f} MB")
+                """if message.images:
+                    # Check image count limit
+                    if len(message.images) > 20:
+                        raise ValueError(f"Maximum of 20 images allowed per message, got {len(message.images)}")
                     
-                    # Check image dimensions
-                    if image.width > 8000 or image.height > 8000:
-                        raise ValueError(f"Image dimensions must be under 8000x8000 pixels, got {image.width}x{image.height}")
-                    
-                    _content.append({
-                        "image": {
-                            "format": image.format or "png",
-                            "source": {
-                                "bytes": image_bytes
+                    for image in message.images:
+                        # Check image size limit (3.75 MB = 3,932,160 bytes)
+                        image_bytes = image._pil_to_bytes(image.image)
+                        if len(image_bytes) > 3_932_160:
+                            raise ValueError(f"Image size must be under 3.75 MB, got {len(image_bytes)/1_048_576:.2f} MB")
+                        
+                        # Check image dimensions
+                        if image.width > 8000 or image.height > 8000:
+                            raise ValueError(f"Image dimensions must be under 8000x8000 pixels, got {image.width}x{image.height}")
+                        
+                        _content.append({
+                            "image": {
+                                "format": image.format or "png",
+                                "source": {
+                                    "bytes": image_bytes
+                                }
                             }
-                        }
-                    })
-            
-            if message.documents:
-                # Check document count limit
-                if len(message.documents) > 5:
-                    raise ValueError(f"Maximum of 5 documents allowed per message, got {len(message.documents)}")
+                        })
                 
-                # Check if there's a text content when documents are present
-                if not any(c.get("text") for c in _content):
-                    raise ValueError("A text field is required when including documents")
-                
-                for document in message.documents:
-                    # Check document size limit (4.5 MB = 4,718,592 bytes)
-                    if len(document.content) > 4_718_592:
-                        raise ValueError(f"Document size must be under 4.5 MB, got {len(document.content)/1_048_576:.2f} MB")
+                if message.documents:
+                    # Check document count limit
+                    if len(message.documents) > 5:
+                        raise ValueError(f"Maximum of 5 documents allowed per message, got {len(message.documents)}")
                     
-                    _content.append({
-                        "document": {
-                            "format": document.extension,
-                            "name": document.name or "",
-                            "source": {
-                                "bytes": document.content
+                    # Check if there's a text content when documents are present
+                    if not any(c.get("text") for c in _content):
+                        raise ValueError("A text field is required when including documents")
+                    
+                    for document in message.documents:
+                        # Check document size limit (4.5 MB = 4,718,592 bytes)
+                        if len(document.content) > 4_718_592:
+                            raise ValueError(f"Document size must be under 4.5 MB, got {len(document.content)/1_048_576:.2f} MB")
+                        
+                        _content.append({
+                            "document": {
+                                "format": document.extension,
+                                "name": document.name or "",
+                                "source": {
+                                    "bytes": document.content
+                                }
                             }
-                        }
-                    })
-            """
+                        })
+                """
 
-            _message["content"] = _content
-            messages.append(_message)
+                _message["content"] = _content
+                messages.append(_message)
 
-        system = (
-            [
-                {
-                    "text": request.conversation.system,
-                }
-            ]
-            if request.conversation.system is not None and len(request.conversation.system) > 0
-            else None
-        )
+            system = (
+                [
+                    {
+                        "text": request.conversation.system,
+                    }
+                ]
+                if request.conversation.system is not None and len(request.conversation.system) > 0
+                else None
+            )
 
-        config = {
-            "maxTokens": request.max_completion_tokens,
-            "temperature": request.temperature,
-            "topP": request.top_p,
-        }
+            config = {
+                "maxTokens": request.max_completion_tokens,
+                "temperature": request.temperature,
+                "topP": request.top_p,
+            }
 
-        return messages, system, config
+            return messages, system, config
+        except Exception as e:
+            raise InternalConversionException(f"Failed to convert request for AWS: {str(e)}") from e
 
     @retry(reraise=True, stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=3, max=60))
     def _service_call(
@@ -194,21 +198,37 @@ class AWSLLMService(LLMService):
                 input_tokens=api_response["usage"]["inputTokens"],
                 completion_tokens=api_response["usage"]["outputTokens"],
             )
-        except Exception as exception:
-            if hasattr(exception, "response"):
-                if (
-                    exception.response["ResponseMetadata"]["HTTPStatusCode"] == 400
-                ):  # Fail directly, this is unrecoverable
-                    return output, tokens, exception
-                elif exception.response["ResponseMetadata"]["HTTPStatusCode"] == 429:  # Retry with exponential backoff
+
+        except Exception as e:
+            if hasattr(e, "response"):
+                status_code = e.response["ResponseMetadata"]["HTTPStatusCode"]
+                error_msg = str(e)
+
+                if status_code == 400:
+                    raise ServiceCallException(f"ValidationException: The input fails to satisfy Bedrock constraints: {error_msg}")
+                elif status_code == 403:
+                    raise ServiceCallException(f"AccessDeniedException: Insufficient permissions to perform this action: {error_msg}")
+                elif status_code == 404:
+                    raise ServiceCallException(f"ResourceNotFoundException: The specified model was not found: {error_msg}")
+                elif status_code == 408:
+                    raise ServiceCallException(f"ModelTimeoutException: The request took too long to process: {error_msg}")
+                elif status_code == 424:
+                    raise ServiceCallException(f"ModelErrorException: The request failed due to a model processing error: {error_msg}")
+                elif status_code == 429:
                     # Get retry state from the function wrapper
                     statistics = getattr(self._service_call, "statistics", None)
-                    if statistics:
-                        print(
-                            f"Call throttling, attempt number {statistics['attempt_number']}, idle for {statistics['idle_for']:.1f} seconds, delay since first attempt {statistics['delay_since_first_attempt']:.1f} seconds."
+                    if statistics and statistics["attempt_number"] >= 5:
+                        raise ServiceCallThrottlingException(
+                            f"ThrottlingException: Request denied due to exceeding account quotas after "
+                            f"{statistics['attempt_number']} attempts over {statistics['delay_since_first_attempt']:.1f} seconds"
                         )
+                    raise  # Let tenacity retry
+                elif status_code == 500:
+                    raise ServiceCallException(f"InternalServerException: An internal server error occurred: {error_msg}")
+                elif status_code == 503:
+                    raise ServiceCallException(f"ServiceUnavailableException: The service is currently unavailable: {error_msg}")
 
-            raise exception
+            raise ServiceCallException(f"Unexpected AWS service error: {str(e)}")
 
         return output, tokens, exception
 
