@@ -36,10 +36,13 @@
 """
 
 import asyncio
+
+from rich import print as rprint
+
 from llm_serv.client import LLMServiceClient
 from llm_serv.conversation.conversation import Conversation
 from llm_serv.providers.base import LLMRequest
-from rich import print as rprint
+
 
 async def main():
     # 1. Initialize the client

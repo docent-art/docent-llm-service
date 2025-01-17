@@ -3,23 +3,27 @@ Run with response = asyncio.run(await internal_client(request, route))
 
 route = "http://localhost:20004/retrieve"
 """
-from typing import Any
-import httpx
-from pydantic import BaseModel
 
-from llm_serv.providers.base import LLMRequest, LLMResponse, LLMResponseFormat, LLMService
-from llm_serv.registry import Model
+import httpx
+
+from llm_serv.providers.base import LLMRequest, LLMResponse, LLMResponseFormat
 
 
 class LLMServiceClient:
-    def __init__(self, host:str, port:int):
+    def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
         self.base_url = f"http://{host}:{port}"
 
         self.provider = None
         self.name = None
-                
+        
+        # Default headers to accept gzip compression
+        self._default_headers = {
+            "Accept-Encoding": "gzip, deflate",
+            "Content-Type": "application/json"
+        }
+
     async def list_models(self, provider: str | None = None) -> list[dict[str, str]]:
         """
         This method calls the /list_models endpoint of the server.
@@ -32,15 +36,12 @@ class LLMServiceClient:
         ]
         """
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{self.base_url}/list_models")
+            response = await client.get(
+                f"{self.base_url}/list_models",
+                headers=self._default_headers
+            )
             response.raise_for_status()
-            models = response.json()
-            
-            # If provider is specified, filter models by provider
-            if provider:
-                models = [model for model in models if model["provider"] == provider]
-            
-            return models
+            return response.json()
 
     async def list_providers(self) -> list[str]:
         """
@@ -48,7 +49,10 @@ class LLMServiceClient:
         It returns a list of providers available in the server.
         """
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{self.base_url}/list_providers")
+            response = await client.get(
+                f"{self.base_url}/list_providers",
+                headers=self._default_headers
+            )
             response.raise_for_status()
             return response.json()
 
@@ -66,25 +70,25 @@ class LLMServiceClient:
         """
         if not self.provider or not self.name:
             raise ValueError("Model is not set, please set it with client.set_model(provider, name) first!")
-        
+
         response_class = request.response_class
         response_format = request.response_format
 
-        async with httpx.AsyncClient() as client:            
-            request_data = request.model_dump(mode='json')
-            
+        async with httpx.AsyncClient() as client:
+            request_data = request.model_dump(mode="json")
+
             response = await client.post(
                 f"{self.base_url}/chat/{self.provider}/{self.name}",
-                json=request_data
+                json=request_data,
+                headers=self._default_headers
             )
             response.raise_for_status()
 
             llm_response_as_json = response.json()
             llm_response = LLMResponse.model_validate(llm_response_as_json)
-            
+
             # Manually convert to StructuredResponse if needed
             if response_format is LLMResponseFormat.XML and response_class is not str:
                 llm_response.output = response_class.from_text(llm_response.output)
 
             return llm_response
-        

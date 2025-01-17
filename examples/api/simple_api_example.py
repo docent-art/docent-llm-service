@@ -31,11 +31,12 @@
     5. Send the request and get response
 """
 
-from llm_serv.providers.base import LLMRequest
-from llm_serv.registry import REGISTRY
+from rich import print as rprint
+
 from llm_serv.api import get_llm_service
 from llm_serv.conversation.conversation import Conversation
-from rich import print as rprint
+from llm_serv.providers.base import LLMRequest
+from llm_serv.registry import REGISTRY
 
 # 1. List available providers
 print("\nAvailable Providers:")
@@ -50,7 +51,7 @@ for model in models:
     rprint(model)
 
 # 3. Select a model and create service
-model = REGISTRY.get_model(provider='AWS', name='claude-3-haiku')
+model = REGISTRY.get_model(provider="AWS", name="claude-3-haiku")
 llm_service = get_llm_service(model)
 
 # 4. Create conversation and request
@@ -67,4 +68,3 @@ print("\nToken Usage:")
 print(f"Input tokens: {response.tokens.input_tokens}")
 print(f"Output tokens: {response.tokens.completion_tokens}")
 print(f"Total tokens: {response.tokens.total_tokens}")
-
