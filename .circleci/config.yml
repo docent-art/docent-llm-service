@@ -1,21 +1,74 @@
-version: 2.1
+version: 2.1 
 
 orbs:
-  aws-cli: circleci/aws-cli@4.1.3
-  aws-ecr: circleci/aws-ecr@9.1.0
+  aws-cli: circleci/aws-cli@5.1.0
+  aws-ecr: circleci/aws-ecr@9.3.4
+  aws-ecs: circleci/aws-ecs@6.0.0
+
+executors:
+  node:
+    working_directory: ~/docent
+    docker:
+      - image: cimg/node:22.9.0
+  test-machine:
+    machine:
+      image: ubuntu-2204:2024.01.1
+      resource_class: medium
+      docker_layer_caching: true
+
+commands:
+  deploy_cms:
+    parameters:
+      environment:
+        type: string
+    steps:
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - checkout
+
+      - aws-cli/setup:
+          profile_name: docent-splitted-deploy
+      - aws-ecr/build_and_push_image:
+          auth:
+              - aws-cli/setup:
+                    profile_name: docent-splitted-deploy
+          region: eu-west-3
+          repo: docent-splitted/docent-llm-service
+          dockerfile: Dockerfile
+          path: .
+      
+      - aws-ecr/ecr_login:
+          profile_name: docent-splitted-deploy
+
+      - aws-ecs/update_service:
+          cluster: "docent-splitted-<< parameters.environment >>-workers"
+          service_name: "docent-llm-service"
+          deployment_controller: ECS
+          family: "docent-splitted-<< parameters.environment >>-docent-llm-service"
+          force_new_deployment: true
+          region: eu-west-3
+          profile_name: docent-splitted-deploy
+
+
+jobs:
+  
+  deploy-test:
+    working_directory: ~/docent
+    executor: node
+    environment:
+      AWS_DEFAULT_REGION: eu-west-3
+      AWS_REGION: eu-west-3
+      ENV: test
+    steps:
+      - deploy_cms:
+          environment: test
+
 
 workflows:
   version: 2
-  build_and_push_image:
+  stack:
     jobs:
-      - aws-ecr/build_and_push_image:
-          auth:
-            - aws-cli/setup:
-                profile_name: docent-splitted-deploy
-          region: eu-west-3
-          dockerfile: Dockerfile
-          profile_name: docent-splitted-deploy
-          repo: docent-splitted/docent-llm-service
+      - deploy-test:
           filters:
             branches:
               only:
