@@ -116,7 +116,7 @@ def response_from_xml(xml: str, return_class: Type['StructuredResponse'], is_roo
             xml = xml.replace('<response>', '').replace('</response>', '')
         
         # Extract children elements
-        children:{} = extract_children_xml(xml)    
+        children:dict = extract_children_xml(xml)    
         
         # For each child, determine is there is a corresponding field name in the return_class fields
         # If so, change the child value for "type" with the corresponding field type

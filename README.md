@@ -19,6 +19,11 @@ Check out https://www.baeldung.com/ops/docker-container-pass-aws-credentials for
 We use an .env file to store the credentials for simplicity.
 Depending on the provider(s) you want to use, you'll need to set up the following env variables:
 
+For OPENAI:
+- OPENAI_API_KEY
+- OPENAI_ORGANIZATION
+- OPENAI_PROJECT
+
 For AWS:
 - AWS_PROFILE
 - AWS_DEFAULT_REGION 
@@ -168,7 +173,7 @@ For more details, see the complete example in ``examples/example_client.py``.
 
 ## TODOs
 
-- [ ] Add OpenAI support
+- [x] Add OpenAI support
 - [ ] Add Anthropic support
 - [ ] Add streaming support
 - [ ] Add caching support
