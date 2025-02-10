@@ -1,15 +1,16 @@
 import httpx
 
-from llm_serv.exceptions import InternalConversionException, ModelNotFoundException, ServiceCallException, ServiceCallThrottlingException, StructuredResponseException
+from llm_serv.exceptions import InternalConversionException, ModelNotFoundException, ServiceCallException, ServiceCallThrottlingException, StructuredResponseException, TimeoutException
 from llm_serv.providers.base import LLMRequest, LLMResponse, LLMResponseFormat
 
 
 class LLMServiceClient:
-    def __init__(self, host: str, port: int):
+    def __init__(self, host: str, port: int, timeout: float = 60.0):
         self.host = host
         self.port = port
         self.base_url = f"http://{host}:{port}"
-
+        self.timeout = timeout
+        
         self.provider = None
         self.name = None
         
@@ -92,6 +93,7 @@ class LLMServiceClient:
             ServiceCallException - when the service call fails for any reason
             ServiceCallThrottlingException - when the service call is throttled but the number retries is exhausted
             StructuredResponseException - when the structured response parsing fails
+            TimeoutException - when the request times out
         """
         if not self.provider or not self.name:
             raise ValueError("Model is not set, please set it with client.set_model(provider, name) first!")
@@ -99,7 +101,7 @@ class LLMServiceClient:
         response_class = request.response_class
         response_format = request.response_format
 
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
             request_data = request.model_dump(mode="json")
 
             try:
@@ -141,5 +143,9 @@ class LLMServiceClient:
 
                 return llm_response
 
+            except httpx.TimeoutException as e:
+                raise TimeoutException(f"Request timed out after {self.timeout} seconds") from e
             except httpx.RequestError as e:
+                if isinstance(e, httpx.ReadTimeout):
+                    raise TimeoutException(f"Read timeout after {self.timeout} seconds") from e
                 raise ServiceCallException(f"Failed to connect to server: {str(e)}")

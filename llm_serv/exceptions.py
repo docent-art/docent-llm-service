@@ -2,6 +2,10 @@ class BaseException(Exception):
     """Base exception class for all LLM service exceptions."""
     pass
 
+class TimeoutException(BaseException):
+    """Exception raised when a request times out."""
+    pass
+
 class StructuredResponseException(BaseException):
     """Exception raised when structured response parsing fails."""
     def __init__(self, message: str, xml: str = "", return_class: type = None):
