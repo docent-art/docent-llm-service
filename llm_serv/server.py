@@ -219,7 +219,7 @@ async def health_check(request: Request):
 
 def main():
     try:
-        port = int(os.getenv("API_PORT", "10000"))
+        port = int(os.getenv("API_PORT", "9999"))
         logger.info(f"Starting server on port {port}")
         uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
     except ValueError as e:

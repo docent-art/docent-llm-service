@@ -1,4 +1,5 @@
 import httpx
+import asyncio
 
 from llm_serv.exceptions import InternalConversionException, ModelNotFoundException, ServiceCallException, ServiceCallThrottlingException, StructuredResponseException, TimeoutException
 from llm_serv.providers.base import LLMRequest, LLMResponse, LLMResponseFormat
@@ -19,6 +20,47 @@ class LLMServiceClient:
             "Accept-Encoding": "gzip, deflate",
             "Content-Type": "application/json"
         }
+        
+        # Do a health check
+        try:
+            # Create event loop if one doesn't exist
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Run health check with 5 second timeout
+            health_check_timeout = 5.0
+            loop.run_until_complete(self._health_check(health_check_timeout))
+        except Exception as e:
+            raise ServiceCallException(f"Failed to connect to LLM service at {self.base_url}: {str(e)}")
+
+    async def _health_check(self, timeout: float) -> None:
+        """
+        Performs a health check by calling the /health endpoint.
+        Raises ConnectionError if the server is not healthy or cannot be reached.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.get(
+                    f"{self.base_url}/health",
+                    headers=self._default_headers
+                )
+                
+                if response.status_code != 200:
+                    error_data = response.json()
+                    error_msg = error_data.get("detail", str(error_data))
+                    raise ConnectionError(f"Server health check failed: {error_msg}")
+                    
+                health_data = response.json()
+                if health_data.get("status") != "healthy":
+                    raise ConnectionError(f"Server reported unhealthy status: {health_data}")
+                    
+        except httpx.TimeoutException:
+            raise ConnectionError(f"Health check timed out after {timeout} seconds")
+        except httpx.RequestError as e:
+            raise ConnectionError(f"Failed to connect to server: {str(e)}")
 
     async def list_models(self, provider: str | None = None) -> list[dict[str, str]]:
         """
@@ -35,7 +77,7 @@ class LLMServiceClient:
             ServiceCallException - when there is an error retrieving the model list
         """
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(
                     f"{self.base_url}/list_models",
                     headers=self._default_headers
@@ -59,7 +101,7 @@ class LLMServiceClient:
             ServiceCallException - when there is an error retrieving the provider list
         """
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(
                     f"{self.base_url}/list_providers",
                     headers=self._default_headers

@@ -24,7 +24,7 @@
 
     ```bash
     docker run -d \
-        -p 10000:10000 \
+        -p 9999:9999 \
         -e AWS_PROFILE=your-aws-profile-name \
         -e AWS_DEFAULT_REGION=your-aws-region-name \
         -e AWS_ACCESS_KEY_ID=your-aws-access-key-id \
@@ -32,7 +32,7 @@
         llm-service
     ```
 
-    This will start the API and the API will be available at http://localhost:10000.
+    This will start the API and the API will be available at http://localhost:9999.
 """
 
 import asyncio
@@ -46,7 +46,7 @@ from llm_serv.providers.base import LLMRequest
 
 async def main():
     # 1. Initialize the client
-    client = LLMServiceClient(host="localhost", port=10000)
+    client = LLMServiceClient(host="localhost", port=9999)
 
     # 2. List available providers
     # Returns a list of provider names like ["AWS", "AZURE", "OPENAI"]
