@@ -8,24 +8,23 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from llm_serv.conversation.conversation import Conversation
 from llm_serv.conversation.role import Role
-from llm_serv.exceptions import InternalConversionException, ServiceCallException, ServiceCallThrottlingException
+from llm_serv.exceptions import CredentialsException, InternalConversionException, ServiceCallException, ServiceCallThrottlingException
 from llm_serv.providers.base import LLMRequest, LLMResponseFormat, LLMService, LLMTokens
 from llm_serv.registry import Model
 from llm_serv.structured_response.model import StructuredResponse
 
 
 def check_credentials() -> None:
-    # Load environment variables from .env file
-    load_dotenv()
-
-    # AWS_PROFILE = os.getenv("AWS_PROFILE")
-    AWS_DEFAULT_REGION = os.getenv("AWS_DEFAULT_REGION")
-    AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
-    AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
-
-    if not AWS_DEFAULT_REGION or not AWS_SECRET_ACCESS_KEY or not AWS_ACCESS_KEY_ID:
-        raise Exception(
-            "Environment variable AWS not set! Please set AWS_PROFILE, AWS_DEFAULT_REGION, AWS_SECRET_ACCESS_KEY and AWS_ACCESS_KEY_ID."
+    required_variables = ["AWS_DEFAULT_REGION", "AWS_SECRET_ACCESS_KEY", "AWS_ACCESS_KEY_ID"]
+    
+    missing_vars = []
+    for var in required_variables:
+        if not os.getenv(var):
+            missing_vars.append(var)
+    
+    if missing_vars:
+        raise CredentialsException(
+            f"Missing required environment variables for AWS: {', '.join(missing_vars)}"
         )
 
 
@@ -76,8 +75,8 @@ class AWSLLMService(LLMService):
                             },
 
 
-        You can include up to 20 images. Each image’s size, height, and width must be no more than 3.75 MB, 8000 px, and 8000 px, respectively.
-        You can include up to five documents. Each document’s size must be no more than 4.5 MB.
+        You can include up to 20 images. Each image's size, height, and width must be no more than 3.75 MB, 8000 px, and 8000 px, respectively.
+        You can include up to five documents. Each document's size must be no more than 4.5 MB.
         If you include a ContentBlock with a document field in the array, you must also include a ContentBlock with a text field.
         You can only include images and documents if the role is user.
         """

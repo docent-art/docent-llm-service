@@ -8,7 +8,7 @@ from llm_serv.conversation.conversation import Conversation
 from llm_serv.conversation.image import Image
 from llm_serv.conversation.message import Message
 from llm_serv.conversation.role import Role
-from llm_serv.exceptions import ServiceCallException, ServiceCallThrottlingException
+from llm_serv.exceptions import CredentialsException, ServiceCallException, ServiceCallThrottlingException
 from llm_serv.providers.base import (LLMRequest, LLMResponseFormat, LLMService,
                                      LLMTokens)
 from llm_serv.registry import Model
@@ -16,13 +16,16 @@ from llm_serv.structured_response.model import StructuredResponse
 
 
 def check_credentials() -> None:
-    AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
-    AZURE_OPEN_AI_API_VERSION = os.getenv("AZURE_OPEN_AI_API_VERSION")
-    AZURE_OPENAI_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
-
-    if not AZURE_OPENAI_API_KEY or not AZURE_OPEN_AI_API_VERSION or not AZURE_OPENAI_DEPLOYMENT_NAME:
-        raise Exception(
-            "Environment variable AZURE_OPENAI_API_KEY and/or AZURE_OPEN_AI_API_VERSION and/or AZURE_OPENAI_DEPLOYMENT_NAME are not set!"
+    required_variables = ["AZURE_OPENAI_API_KEY", "AZURE_OPEN_AI_API_VERSION", "AZURE_OPENAI_DEPLOYMENT_NAME"]
+    
+    missing_vars = []
+    for var in required_variables:
+        if not os.getenv(var):
+            missing_vars.append(var)
+    
+    if missing_vars:
+        raise CredentialsException(
+            f"Missing required environment variables for Azure: {', '.join(missing_vars)}"
         )
 
 

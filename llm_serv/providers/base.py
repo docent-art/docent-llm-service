@@ -1,11 +1,11 @@
 import abc
+import logging
 import time
 from copy import deepcopy
 from enum import Enum
 from typing import Annotated, Type
 
 from pydantic import BaseModel, Field, PlainSerializer, computed_field, field_validator
-from rich import print
 
 from llm_serv.conversation.conversation import Conversation
 from llm_serv.exceptions import (
@@ -16,7 +16,6 @@ from llm_serv.exceptions import (
 )
 from llm_serv.registry import Model
 from llm_serv.structured_response.model import StructuredResponse
-
 
 class LLMResponseFormat(Enum):
     TEXT = "TEXT"
@@ -86,9 +85,9 @@ class LLMResponse(BaseModel):
         default=str, exclude=True
     )
     response_format: LLMResponseFormat = LLMResponseFormat.TEXT
-    max_completion_tokens: int = 0
-    temperature: float = 0
-    top_p: float = 0
+    max_completion_tokens: int = 1024
+    temperature: float = 0.2
+    top_p: float = 0.95
     tokens: LLMTokens | None = None
     llm_model: Model | None = None
     start_time: float | None = None  # time.time() as fractions of a second
@@ -147,7 +146,7 @@ class LLMService(abc.ABC):
                 assert exception is not None
                 raise ServiceCallException(str(exception))
 
-            response.output = output  # assign initial string output
+            response.output = output  # assign initial string output            
 
             """
             If the response format is XML and the response class is not a string, convert the XML to the desired StructuredResponse class.

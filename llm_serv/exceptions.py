@@ -2,6 +2,10 @@ class BaseException(Exception):
     """Base exception class for all LLM service exceptions."""
     pass
 
+class CredentialsException(BaseException):
+    """Exception raised when credentials are not set."""
+    pass
+
 class TimeoutException(BaseException):
     """Exception raised when a request times out."""
     pass

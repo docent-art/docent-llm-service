@@ -8,7 +8,7 @@ from llm_serv.conversation.conversation import Conversation
 from llm_serv.conversation.image import Image
 from llm_serv.conversation.message import Message
 from llm_serv.conversation.role import Role
-from llm_serv.exceptions import ServiceCallException, ServiceCallThrottlingException
+from llm_serv.exceptions import CredentialsException, ServiceCallException, ServiceCallThrottlingException
 from llm_serv.providers.base import (LLMRequest, LLMResponseFormat, LLMService,
                                      LLMTokens)
 from llm_serv.registry import Model
@@ -16,23 +16,25 @@ from llm_serv.structured_response.model import StructuredResponse
 
 
 def check_credentials() -> None:
-    OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
-    OPENAI_ORGANIZATION = os.getenv("OPENAI_ORGANIZATION")
-    OPENAI_PROJECT = os.getenv("OPENAI_PROJECT")
+    required_variables = ["OPENAI_API_KEY", "OPENAI_ORGANIZATION", "OPENAI_PROJECT"]
+        
+    missing_vars = []
+    for var in required_variables:
+        if not os.getenv(var):
+            missing_vars.append(var)
     
-    if not OPENAI_API_KEY or not OPENAI_ORGANIZATION or not OPENAI_PROJECT:
-        raise Exception(
-            "Environment variable OPENAI_API_KEY and/or OPENAI_ORGANIZATION and/or OPENAI_PROJECT are not set!"
+    if missing_vars:
+        raise CredentialsException(
+            f"Missing required environment variables for OpenAI: {', '.join(missing_vars)}"
         )
-
 
 class OpenAILLMService(LLMService):
     def __init__(self, model: Model):
         super().__init__(model)        
 
         self._client = OpenAI(
-            organization='org-NWw78HYGMxmx4ilUGdtNbb22',
-            project='proj_VypTUATxvLgLvPnQBsUXbUvY',
+            organization=os.getenv("OPENAI_ORGANIZATION"),
+            project=os.getenv("OPENAI_PROJECT")
             )
 
     def _convert(self, request: LLMRequest) -> tuple[list, dict, dict]:
@@ -186,11 +188,11 @@ class OpenAILLMService(LLMService):
                     statistics = getattr(self._service_call, "statistics", None)
                     if statistics and statistics['attempt_number'] >= 5:
                         raise ServiceCallThrottlingException(
-                            f"Azure service is throttling requests after {statistics['attempt_number']} attempts "
+                            f"OpenAI service is throttling requests after {statistics['attempt_number']} attempts "
                             f"over {statistics['delay_since_first_attempt']:.1f} seconds"
                         )
                     raise  # Let tenacity retry
-            raise ServiceCallException(f"Azure service error: {str(e)}")
+            raise ServiceCallException(f"OpenAI service error: {str(e)}")
 
         return output, tokens, exception
 
@@ -199,7 +201,7 @@ if __name__ == "__main__":
     from llm_serv.api import get_llm_service
     from llm_serv.registry import REGISTRY
 
-    model = REGISTRY.get_model(provider="AZURE", name="gpt-4o-mini")
+    model = REGISTRY.get_model(provider="OPENAI", name="gpt-4o-mini")
     llm = get_llm_service(model)
 
     class MyClass(StructuredResponse):

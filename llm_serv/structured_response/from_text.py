@@ -113,7 +113,7 @@ def response_from_xml(xml: str, return_class: Type['StructuredResponse'], is_roo
         
         # Handle root element
         if is_root:
-            xml = xml.replace('<response>', '').replace('</response>', '')
+            xml = xml.replace('<structured_response>', '').replace('</structured_response>', '')
         
         # Extract children elements
         children:dict = extract_children_xml(xml)    
@@ -272,7 +272,7 @@ if __name__ == "__main__":
 
 
     xml_text = """```xml
-    <response>
+    <structured_response>
     <example_string type='string'>[stringyyy  ]   s \t</example_string><example_int>2</example_int>    
     <example_int_list >
         <example_int_list_element type="integer">2</example_int_list_element>
@@ -345,6 +345,6 @@ if __name__ == "__main__":
             </subclasstype1>
         </example_list_of_subclasstype1_element>
     </example_list_of_subclasstype1>
-</response> This is a complete example.```"""
+</structured_response> This is a complete example.```"""
 
     rprint(response_from_xml(xml_text, TestStructuredResponse))

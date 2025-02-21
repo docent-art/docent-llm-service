@@ -34,7 +34,7 @@ def response_to_xml(object: Type["StructuredResponse"], exclude_fields: List[str
 
     calling this will generate the following examples:
 
-    <response>
+    <structured_response>
         <a_string type="string">[string]</a_string>
         <a_string_none type="string">[string]</a_string_none> <!-- if null or not applicable leave this element empty -->
         <a_int type="integer">[integer]</a_int>
@@ -64,14 +64,14 @@ def response_to_xml(object: Type["StructuredResponse"], exclude_fields: List[str
             </a_optional_list_of_subclass_element>
             ...
         </a_optional_list_of_subclass>
-    </response>
+    </structured_response>
 
     Rules for XML generation:
 
     1. Basic Structure:
        - Each field gets its own XML tag using the field name: <field_name type="data type">...</field_name>
        - Indent each level with 4 spaces
-       - Root class uses <response> as tag name, no type required as it's always a class, nested classes use their lowercase class name
+       - Root class uses <structured_response> as tag name, no type required as it's always a class, nested classes use their lowercase class name
 
     2. Optional Fields:
        - Add comment after opening tag: <!-- if null or not applicable leave this element empty -->
@@ -160,7 +160,7 @@ def response_to_xml(object: Type["StructuredResponse"], exclude_fields: List[str
 
     def generate_instructions() -> list[str]:
         return [
-            "\nFormatting instructions: respond without any other explanations or comments, prepended or appended to the <response> tags. Pay attention that all fields are attended to, and properly enclosed within their own opening and closing tags.\n"
+            "\nFormatting instructions: respond without any other explanations or comments, prepended or appended to the <structured_response> opening and closingtags. Pay attention that all fields are attended to, and properly enclosed within their own opening and closing tags.\n"
         ]
 
     def generate_example_xml(
@@ -168,7 +168,7 @@ def response_to_xml(object: Type["StructuredResponse"], exclude_fields: List[str
     ) -> list[str]:
         lines = []
         indent = "    " * indent_level
-        tag_name = "response" if indent_level == 0 else object.__name__.lower()
+        tag_name = "structured_response" if indent_level == 0 else object.__name__.lower()
 
         # Root response tag doesn't need type attribute
         lines.append(f"{indent}<{tag_name}>")
@@ -289,7 +289,7 @@ def response_to_xml(object: Type["StructuredResponse"], exclude_fields: List[str
                     collect_nested_descriptions(field_type)
 
         # Then describe root class
-        all_descriptions.append(f"\nHere is the description for each field for the <response> main element:")
+        all_descriptions.append(f"\nHere is the description for each field for the <structured_response> main element:")
         for field_name, field_info in object.model_fields.items():
             if field_name not in exclude_fields:
                 all_descriptions.append(_get_field_description(field_name, field_info))
