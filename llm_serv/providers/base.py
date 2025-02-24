@@ -1,5 +1,4 @@
 import abc
-import logging
 import time
 from copy import deepcopy
 from enum import Enum
@@ -61,7 +60,7 @@ class LLMRequest(BaseModel):
     temperature: float = 0.5
     max_retries: int = 3
     top_p: float = 0.95
-
+    
     class Config:
         arbitrary_types_allowed = True
 

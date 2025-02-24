@@ -39,6 +39,7 @@ class WeatherPrognosis(StructuredResponse):
     wind_speed: Optional[float] = Field(description="The wind speed in km/h")
     high: Optional[float] = Field(ge=-20, le=60, description="The high temperature in degrees Celsius")
     low: Optional[float] = Field(description="The low temperature in degrees Celsius")
+    storm_tonight: bool = Field(description="Whether there will be a storm tonight")
 
 
 prompt = f"""

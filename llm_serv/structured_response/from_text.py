@@ -150,10 +150,15 @@ def response_from_xml(xml: str, return_class: Type['StructuredResponse'], is_roo
             content = child["content"]
                     
             # Handle basic types
-            if base_type in (str, int, float):
+            if base_type in (str, int, float, bool):
                 field_values[field_name] = None
                 try:
-                    field_values[field_name] = base_type(content)
+                    if base_type is bool:
+                        # Convert string to boolean
+                        content = content.strip().lower()
+                        field_values[field_name] = content in ('true', '1', 'yes', 'on')
+                    else:
+                        field_values[field_name] = base_type(content)
                 except Exception as e:
                     pass
                     #print(f"Warning parsing {field_name} with type {base_type}: {e}, default to None")
