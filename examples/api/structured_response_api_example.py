@@ -71,3 +71,6 @@ print("\nToken Usage:")
 print(f"Input tokens: {response.tokens.input_tokens}")
 print(f"Output tokens: {response.tokens.completion_tokens}")
 print(f"Total tokens: {response.tokens.total_tokens}")
+
+print("\nRich print:")
+response.rprint()
