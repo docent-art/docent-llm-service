@@ -19,6 +19,11 @@ Check out https://www.baeldung.com/ops/docker-container-pass-aws-credentials for
 We use an .env file to store the credentials for simplicity.
 Depending on the provider(s) you want to use, you'll need to set up the following env variables:
 
+For OPENAI:
+- OPENAI_API_KEY
+- OPENAI_ORGANIZATION
+- OPENAI_PROJECT
+
 For AWS:
 - AWS_PROFILE
 - AWS_DEFAULT_REGION 
@@ -99,7 +104,7 @@ poetry install
 python -m llm_serv.server
 ```
 
-3. The server will be available at `http://localhost:10000`.
+3. The server will be available at `http://localhost:9999`.
 
 </details>
 
@@ -115,7 +120,7 @@ docker build -t llm-service .
 2. Run the container:
 ```bash
 docker run -d \
--p 10000:10000 \
+-p 9999:9999 \
 -e AWS_PROFILE=your-aws-profile-name \
 -e AWS_DEFAULT_REGION=your-aws-region-name \
 -e AWS_ACCESS_KEY_ID=your-aws-access-key-id \
@@ -123,7 +128,7 @@ docker run -d \
 llm-service
 ```
 
-3. The server will be available at `http://localhost:10000`.
+3. The server will be available at `http://localhost:9999`.
 
 </details>
 
@@ -139,7 +144,7 @@ from llm_serv.providers.base import LLMRequest
 
 async def main():
     # Initialize the client
-    client = LLMServiceClient(host="localhost", port=10000)
+    client = LLMServiceClient(host="localhost", port=9999)
 
     # List available providers and models
     providers = await client.list_providers()
@@ -168,7 +173,7 @@ For more details, see the complete example in ``examples/example_client.py``.
 
 ## TODOs
 
-- [ ] Add OpenAI support
+- [x] Add OpenAI support
 - [ ] Add Anthropic support
 - [ ] Add streaming support
 - [ ] Add caching support

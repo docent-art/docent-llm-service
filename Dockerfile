@@ -32,7 +32,7 @@ USER appuser
 # Set environment variables
 ENV PYTHONPATH="/app" \
     PYTHONUNBUFFERED=1 \
-    API_PORT=10000
+    API_PORT=9999
 
 # Expose the FastAPI port
 EXPOSE ${API_PORT}

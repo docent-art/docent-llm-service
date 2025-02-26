@@ -51,7 +51,7 @@ for model in models:
     rprint(model)
 
 # 3. Select a model and create service
-model = REGISTRY.get_model(provider="AWS", name="claude-3-haiku")
+model = REGISTRY.get_model(provider="OPENAI", name="gpt-4o-mini")
 llm_service = get_llm_service(model)
 
 # 4. Create conversation and request

@@ -154,9 +154,9 @@ def test_message_file_serialization(test_message, tmp_path):
 def test_message_edge_cases():
     """Test edge cases and potential error conditions"""
     # Very long text
-    long_text = "a" * 1000000
+    long_text = "a" * 999900
     msg = Message(text=long_text)
-    assert len(msg.text) == 1000000
+    assert len(msg.text) == 999900
     
     # Unicode edge cases
     unicode_text = "🌟" * 1000

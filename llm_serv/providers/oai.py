@@ -1,6 +1,6 @@
 import os
 
-from openai import AzureOpenAI
+from openai import OpenAI
 from pydantic import Field
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -16,8 +16,8 @@ from llm_serv.structured_response.model import StructuredResponse
 
 
 def check_credentials() -> None:
-    required_variables = ["AZURE_OPENAI_API_KEY", "AZURE_OPEN_AI_API_VERSION", "AZURE_OPENAI_DEPLOYMENT_NAME"]
-    
+    required_variables = ["OPENAI_API_KEY", "OPENAI_ORGANIZATION", "OPENAI_PROJECT"]
+        
     missing_vars = []
     for var in required_variables:
         if not os.getenv(var):
@@ -25,19 +25,17 @@ def check_credentials() -> None:
     
     if missing_vars:
         raise CredentialsException(
-            f"Missing required environment variables for Azure: {', '.join(missing_vars)}"
+            f"Missing required environment variables for OpenAI: {', '.join(missing_vars)}"
         )
 
-
-class AzureOpenAILLMService(LLMService):
+class OpenAILLMService(LLMService):
     def __init__(self, model: Model):
         super().__init__(model)        
 
-        self._client = AzureOpenAI(
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            api_version=os.getenv("AZURE_OPEN_AI_API_VERSION"),
-            azure_endpoint=f"https://{os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME')}.openai.azure.com",
-        )
+        self._client = OpenAI(
+            organization=os.getenv("OPENAI_ORGANIZATION"),
+            project=os.getenv("OPENAI_PROJECT")
+            )
 
     def _convert(self, request: LLMRequest) -> tuple[list, dict, dict]:
         """
@@ -190,11 +188,11 @@ class AzureOpenAILLMService(LLMService):
                     statistics = getattr(self._service_call, "statistics", None)
                     if statistics and statistics['attempt_number'] >= 5:
                         raise ServiceCallThrottlingException(
-                            f"Azure service is throttling requests after {statistics['attempt_number']} attempts "
+                            f"OpenAI service is throttling requests after {statistics['attempt_number']} attempts "
                             f"over {statistics['delay_since_first_attempt']:.1f} seconds"
                         )
                     raise  # Let tenacity retry
-            raise ServiceCallException(f"Azure service error: {str(e)}")
+            raise ServiceCallException(f"OpenAI service error: {str(e)}")
 
         return output, tokens, exception
 
@@ -203,7 +201,7 @@ if __name__ == "__main__":
     from llm_serv.api import get_llm_service
     from llm_serv.registry import REGISTRY
 
-    model = REGISTRY.get_model(provider="AZURE", name="gpt-4o-mini")
+    model = REGISTRY.get_model(provider="OPENAI", name="gpt-4o-mini")
     llm = get_llm_service(model)
 
     class MyClass(StructuredResponse):

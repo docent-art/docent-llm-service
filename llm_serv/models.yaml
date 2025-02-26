@@ -35,6 +35,19 @@ MODELS:
       max_output_tokens: 16000
       config: {}
 
+  OPENAI:
+    gpt-4o:
+      id: gpt-4o
+      max_tokens: 128000
+      max_output_tokens: 16000
+      config: {}
+    
+    gpt-4o-mini:
+      id: gpt-4o-mini
+      max_tokens: 128000
+      max_output_tokens: 16000
+      config: {}
+
   AWS:
     claude-3-5-sonnet:
       id: anthropic.claude-3-5-sonnet-20240620-v1:0

@@ -38,5 +38,15 @@ def get_llm_service(model: Model) -> LLMService:
             from llm_serv.providers.azure import AzureOpenAILLMService
 
             return AzureOpenAILLMService(model)
+        case "OPENAI":
+            # Check credentials
+            from llm_serv.providers.oai import check_credentials
+
+            check_credentials()
+
+            # Create LLM service
+            from llm_serv.providers.oai import OpenAILLMService
+
+            return OpenAILLMService(model)
         case _:
             raise ValueError(f"Unsupported provider: {provider_name}. Only AWS and Azure are currently supported.")

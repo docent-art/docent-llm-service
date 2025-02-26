@@ -44,7 +44,7 @@ class WeatherPrognosis(StructuredResponse):
 
 async def main():
     # Initialize the client
-    client = LLMServiceClient(host="localhost", port=10000)
+    client = LLMServiceClient(host="localhost", port=9999, timeout=20.0)
 
     # Set the model to use
     client.set_model(provider="AWS", name="claude-3-haiku")

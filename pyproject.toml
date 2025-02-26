@@ -20,7 +20,6 @@ pillow = "^11.1.0"
 dateparser = "^1.2.0"
 boto3 = "1.35.99"
 openai = "^1.59.7"
-python-dotenv = "^1.0.1"
 
 [tool.pdm.dev-dependencies]
 test = [

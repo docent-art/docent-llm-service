@@ -39,6 +39,7 @@ class WeatherPrognosis(StructuredResponse):
     wind_speed: Optional[float] = Field(description="The wind speed in km/h")
     high: Optional[float] = Field(ge=-20, le=60, description="The high temperature in degrees Celsius")
     low: Optional[float] = Field(description="The low temperature in degrees Celsius")
+    storm_tonight: bool = Field(description="Whether there will be a storm tonight")
 
 
 prompt = f"""
@@ -70,3 +71,6 @@ print("\nToken Usage:")
 print(f"Input tokens: {response.tokens.input_tokens}")
 print(f"Output tokens: {response.tokens.completion_tokens}")
 print(f"Total tokens: {response.tokens.total_tokens}")
+
+print("\nRich print:")
+response.rprint()
